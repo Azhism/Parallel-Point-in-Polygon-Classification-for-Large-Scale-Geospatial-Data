@@ -2,7 +2,7 @@
 
 > A comprehensive exploration of spatial indexing and parallel algorithms for rapid geospatial classification at scale.
 
-## 🎯 Project Overview
+## Project Overview
 
 This project addresses a critical problem in geospatial systems: **rapidly classifying millions of GPS points against thousands of polygonal regions**. Real-world applications include:
 - City boundary & administrative zone classification
@@ -20,7 +20,7 @@ Classifying 1 million points against 10,000 polygons using naive ray-casting:
 
 ---
 
-## 📊 Results (Milestone 1 - Complete)
+## Results (Milestone 1 - Complete)
 
 ### Benchmark: 100×100 Polygon Grid (10,000 polygons)
 
@@ -61,7 +61,7 @@ Classifying 1 million points against 10,000 polygons using naive ray-casting:
 │   │   ├── distribution.hpp            Point dataset generation
 │   │   └── polygon_loader.hpp          Grid, square, circle polygons
 │   └── index/
-│       ├── quadtree.hpp                Quadtree spatial index ⭐
+│       ├── quadtree.hpp                Quadtree spatial index 
 │       └── bbox_filter.hpp             Brute-force reference (linear scan)
 │
 ├── src/
@@ -75,7 +75,7 @@ Classifying 1 million points against 10,000 polygons using naive ray-casting:
 │   │   ├── clustered_distribution.cpp  Gaussian clusters
 │   │   └── polygon_loader.cpp          Grid generation
 │   └── index/
-│       ├── quadtree.cpp                ⭐ Main acceleration structure
+│       ├── quadtree.cpp                 Main acceleration structure
 │       └── bbox_filter.cpp             Reference baseline
 │
 ├── tests/
@@ -86,7 +86,7 @@ Classifying 1 million points against 10,000 polygons using naive ray-casting:
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ### Core Components
 
@@ -96,7 +96,7 @@ Classifying 1 million points against 10,000 polygons using naive ray-casting:
 - **BBox**: Axis-aligned bounding box with containment/intersection tests
 - **RayCaster**: Standard point-in-polygon using ray-casting algorithm
 
-#### 2. **Spatial Index: Quadtree** ⭐
+#### 2. **Spatial Index: Quadtree** 
 Recursive 2D partitioning that divides space into 4 quadrants (NW, NE, SW, SE):
 - **Build**: O(P log P) where P = number of polygons
 - **Query**: O(log N) average case, where N = tree depth
@@ -128,7 +128,7 @@ Stage 2: Quadtree-Accelerated Query
 
 ---
 
-## 🚀 Build & Run
+## Build & Run
 
 ### Prerequisites
 - **C++17 compiler** (g++, clang, MSVC)
@@ -179,7 +179,7 @@ Dataset: 1000000 points
 
 ---
 
-## 📈 Design Decisions
+## Design Decisions
 
 ### 1. **RayCasting Algorithm**
 Chosen for simplicity and correctness over sweep-line algorithms. Handles edge cases:
@@ -205,7 +205,7 @@ Chosen for simplicity and correctness over sweep-line algorithms. Handles edge c
 
 ---
 
-## 🔬 Experimental Methodology
+## Experimental Methodology
 
 ### Benchmark Configuration
 | Parameter | Value |
@@ -225,18 +225,18 @@ Chosen for simplicity and correctness over sweep-line algorithms. Handles edge c
 
 ---
 
-## 📋 Files Overview
+## Files Overview
 
 ### Source Code Status
 
 | File | Status | Purpose |
 |------|--------|---------|
-| `src/index/quadtree.cpp` | ✅ Active | Main spatial index |
-| `src/index/bbox_filter.cpp` | ✅ Reference | Baseline for comparison |
-| `src/geometry/ray_casting.cpp` | ✅ Core | Geometric algorithm |
-| `src/benchmark_m1.cpp` | ✅ Running | Performance measurement |
-| `tests/test_ray_casting.cpp` | ✅ Validation | Correctness tests |
-| `src/generator/*` | ✅ Utility | Test data generation |
+| `src/index/quadtree.cpp` | Active | Main spatial index |
+| `src/index/bbox_filter.cpp` | Reference | Baseline for comparison |
+| `src/geometry/ray_casting.cpp` | Core | Geometric algorithm |
+| `src/benchmark_m1.cpp` | Running | Performance measurement |
+| `tests/test_ray_casting.cpp` | Validation | Correctness tests |
+| `src/generator/*` | Utility | Test data generation |
 
 ### Documentation
 
@@ -250,30 +250,8 @@ Chosen for simplicity and correctness over sweep-line algorithms. Handles edge c
 
 ---
 
-## 🔄 Next Steps (Milestone 2)
 
-### Shared-Memory Parallelism
-- **OpenMP** for multi-core speedup
-- **Work-stealing queue** for load balancing
-- **Morton-order sorting** for cache locality
-- Target: **3-6x speedup** on 4-8 cores
-
-### Implementation
-```cpp
-#pragma omp parallel for schedule(work_stealing)
-for (const auto& point : points) {
-    // Quadtree query + ray-casting
-}
-```
-
-### Scaling Study
-- Weak scaling: constant work per thread
-- Strong scaling: fixed workload across threads
-- Speedup curve on 2/4/8 cores
-
----
-
-## 📝 Key Algorithms
+## Key Algorithms
 
 ### Ray-Casting (Point-in-Polygon)
 ```
@@ -310,7 +288,7 @@ for (const auto& point : points) {
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Build Issues
 
@@ -333,7 +311,7 @@ for (const auto& point : points) {
 
 ---
 
-## 📚 References
+## References
 
 - Point-in-Polygon Algorithms: [Shimrat (1962)](https://en.wikipedia.org/wiki/Point_in_polygon)
 - Quadtrees: [Same (1984)](https://en.wikipedia.org/wiki/Quadtree)
@@ -341,20 +319,3 @@ for (const auto& point : points) {
 
 ---
 
-## 👥 Team
-
-| Role | Responsibility |
-|------|-----------------|
-| Bobby | Quadtree implementation & spatial indexing |
-| Ayaan | Benchmark pipeline & result collection |
-| Anas | Dataset generation & validation |
-| Tayyib | Correctness verification |
-
----
-
-## 📄 License
-
-Academic project - PDC (Parallel & Distributed Computing) course
-
-**Last Updated**: March 17, 2026  
-**Status**: ✅ Milestone 1 Complete (15-19x speedup achieved)
