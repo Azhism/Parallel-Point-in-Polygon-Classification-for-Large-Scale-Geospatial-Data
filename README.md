@@ -1,321 +1,184 @@
 # Parallel Point-in-Polygon Classification for Large-Scale Geospatial Data
 
-> A comprehensive exploration of spatial indexing and parallel algorithms for rapid geospatial classification at scale.
+A comprehensive exploration of spatial indexing and parallel-oriented design for rapid geospatial classification at scale.
 
 ## Project Overview
 
-This project addresses a critical problem in geospatial systems: **rapidly classifying millions of GPS points against thousands of polygonal regions**. Real-world applications include:
-- City boundary & administrative zone classification
-- Postal zone assignment
-- Service area determination (delivery, emergency response)
-- Geofence-based filtering
+This project addresses a critical geospatial systems problem: classifying very large point sets (GPS-like events) against polygon regions efficiently and correctly.
 
-### The Challenge
+Real-world applications include:
 
-Classifying 1 million points against 10,000 polygons using naive ray-casting:
-- **500M+ geometric operations** required
-- **Linear scan** through all polygons per point
-- Without spatial indexing: **~180 seconds** on modern hardware
-- **With quadtree indexing: ~7 seconds** (25x faster)
+1. City boundary and administrative zone classification
+2. Postal zone assignment
+3. Service area determination (delivery, emergency response)
+4. Geofence-based filtering
 
----
+## The Challenge
 
-## Results (Milestone 1 - Complete)
+Classifying 1 million points against 10,000 polygons with naive ray-casting is expensive:
 
-### Benchmark: 100×100 Polygon Grid (10,000 polygons)
+1. Massive geometric work
+2. Linear polygon scanning per point
+3. Heavy sensitivity to spatial skew and polygon complexity
 
-#### Uniform Distribution
-| Dataset | Brute Force | Quadtree Index | **Speedup** |
-|---------|------------|----------------|-----------|
-| 100K points | 9,296.8 ms | 720.8 ms | **12.9x** |
-| 1M points | 107,290.3 ms | 7,025.1 ms | **15.3x** |
+Spatial indexing is required to keep candidate checks small and maintain high throughput.
 
-#### Clustered Distribution  
-| Dataset | Brute Force | Quadtree Index | **Speedup** |
-|---------|------------|----------------|-----------|
-| 100K points | 12,284.9 ms | 648.7 ms | **18.9x** |
-| 1M points | 183,213.8 ms | 11,048.5 ms | **16.6x** |
+## Results (Milestone 1)
 
-**Key Insights:**
-- Quadtree outperforms brute force by **12-19x** on realistic dataset sizes
-- Clustered data benefits more (~19x) due to spatial pruning effectiveness
-- Index build cost negligible (~240-650ms for 10K polygons)
-- All results validated for correctness (ray-casting matches exactly)
+Benchmark: 100 x 100 polygon grid (10,000 polygons)
 
----
+### Uniform Distribution
 
-## 📁 Project Structure
+| Dataset | Brute Force + BBox | Quadtree | Strip Index | Quadtree Speedup | Strip Speedup |
+|---|---:|---:|---:|---:|---:|
+| 100K points | 2560.86 ms | 88.08 ms | 80.65 ms | 29.08x | 31.75x |
+| 1M points | 20064.42 ms | 773.39 ms | 672.40 ms | 25.94x | 29.84x |
 
-```
+### Clustered Distribution
+
+| Dataset | Brute Force + BBox | Quadtree | Strip Index | Quadtree Speedup | Strip Speedup |
+|---|---:|---:|---:|---:|---:|
+| 100K points | 1948.59 ms | 45.20 ms | 51.60 ms | 43.11x | 37.77x |
+| 1M points | 20937.39 ms | 666.83 ms | 765.08 ms | 31.40x | 27.37x |
+
+### Real-World Data Benchmark
+
+Inputs:
+
+1. Polygons from `pak_admin2.geojson`
+2. Points from `pak_admincentroids.geojson`
+
+Loaded counts:
+
+1. 204 polygons (after MultiPolygon expansion)
+2. 745 centroid points
+
+Runtime (real data):
+
+1. Stage 1 (Brute Force + BBox): 21.36 ms
+2. Stage 2 (Quadtree): 19.74 ms
+3. Speedup: 1.08x
+
+## Key Insights
+
+1. Spatial indexing delivers strong gains on synthetic scale tests (10K polygons, up to 1M points).
+2. Quadtree and Strip Index both provide major acceleration over brute-force baseline (roughly 27x to 43x in this run).
+3. Real-data stage validates correctness and GeoJSON integration; speedup is smaller due to low query volume (745 points).
+4. All stages are validated against baseline results.
+
+## Project Structure
+
+```text
 .
-├── README.md                           (this file)
-├── CMakeLists.txt                      (build configuration)
-├── build.sh / build.bat                (convenience build scripts)
-│
-├── include/
-│   ├── geometry/
-│   │   ├── point.hpp                   Point struct (x, y, id)
-│   │   ├── polygon.hpp                 Polygon with bbox, holes
-│   │   └── ray_casting.hpp             Point-in-polygon algorithm
-│   ├── generator/
-│   │   ├── distribution.hpp            Point dataset generation
-│   │   └── polygon_loader.hpp          Grid, square, circle polygons
-│   └── index/
-│       ├── quadtree.hpp                Quadtree spatial index 
-│       └── bbox_filter.hpp             Brute-force reference (linear scan)
-│
-├── src/
-│   ├── benchmark_m1.cpp                Milestone 1: Sequential benchmarking
-│   ├── geometry/
-│   │   ├── point.cpp
-│   │   ├── polygon.cpp
-│   │   └── ray_casting.cpp             Ray-casting implementation
-│   ├── generator/
-│   │   ├── uniform_distribution.cpp    Uniform random points
-│   │   ├── clustered_distribution.cpp  Gaussian clusters
-│   │   └── polygon_loader.cpp          Grid generation
-│   └── index/
-│       ├── quadtree.cpp                 Main acceleration structure
-│       └── bbox_filter.cpp             Reference baseline
-│
-├── tests/
-│   └── test_ray_casting.cpp            Unit tests (ray-casting correctness)
-│
-└── build/                              (generated - compiled objects & executables)
+|-- README.md
+|-- Week1_completion.md
+|-- build.sh
+|-- CMakeLists.txt
+|-- pak_admin2.geojson
+|-- pak_admincentroids.geojson
+|-- include/
+|   |-- geometry/
+|   |   |-- point.hpp
+|   |   |-- polygon.hpp
+|   |   `-- ray_casting.hpp
+|   |-- generator/
+|   |   |-- distribution.hpp
+|   |   `-- polygon_loader.hpp
+|   |-- index/
+|   |   |-- bbox_filter.hpp
+|   |   |-- geojson_loader.hpp
+|   |   |-- quadtree.hpp
+|   |   `-- strip_index.hpp
+|   `-- nlohmann/
+|       `-- json.hpp
+|-- src/
+|   |-- benchmark_m1.cpp
+|   |-- geometry/
+|   |   |-- point.cpp
+|   |   |-- polygon.cpp
+|   |   `-- ray_casting.cpp
+|   |-- generator/
+|   |   |-- uniform_distribution.cpp
+|   |   |-- clustered_distribution.cpp
+|   |   `-- polygon_loader.cpp
+|   `-- index/
+|       |-- bbox_filter.cpp
+|       |-- geojson_loader.cpp
+|       |-- quadtree.cpp
+|       `-- strip_index.cpp
+|-- tests/
+|   `-- test_ray_casting.cpp
+`-- docs/
 ```
-
----
 
 ## Architecture
 
-### Core Components
+### 1. Geometry Layer
 
-#### 1. **Geometry Layer**
-- **Point**: Simple 2D point with unique ID
-- **Polygon**: Exterior ring + optional holes, with precomputed bounding box
-- **BBox**: Axis-aligned bounding box with containment/intersection tests
-- **RayCaster**: Standard point-in-polygon using ray-casting algorithm
+1. Point, Polygon, BBox primitives
+2. Ray-casting classifier with boundary handling
+3. Support for holes and MultiPolygon-expanded components
 
-#### 2. **Spatial Index: Quadtree** 
-Recursive 2D partitioning that divides space into 4 quadrants (NW, NE, SW, SE):
-- **Build**: O(P log P) where P = number of polygons
-- **Query**: O(log N) average case, where N = tree depth
-- **Features**:
-  - Automatic splitting when leaf nodes exceed threshold (10 polygons)
-  - Handles polygons spanning multiple quadrants
-  - Candidate deduplication via set-based queries
+### 2. Indexing Layer
 
-#### 3. **Benchmarking Pipeline**
+1. BBox linear filter baseline
+2. Quadtree spatial index
+3. Strip Index (horizontal strip partitioning)
 
-Two-stage comparison:
-```
-Stage 1: Brute Force + Bounding Box Filter
-  for each point:
-    candidates = linear scan all polygons, check bbox
-    for each candidate:
-      if point_in_polygon(point, candidate):
-        record result
+### 3. Data Layer
 
-Stage 2: Quadtree-Accelerated Query  
-  for each point:
-    candidates = quadtree.query(point)  ← spatial pruning
-    for each candidate:
-      if point_in_polygon(point, candidate):
-        record result
-```
+1. Synthetic generators (uniform and clustered)
+2. GeoJSON polygon and centroid loaders
 
-**Validation**: Both methods produce identical results (correctness guaranteed)
+## Benchmarking Pipeline
 
----
+Stage flow in `src/benchmark_m1.cpp`:
 
-## Build & Run
+1. Stage 1: Brute force + bbox filter
+2. Stage 2: Quadtree candidate query + ray-casting
+3. Stage 3: Strip Index candidate query + ray-casting
+4. Stage 4: Real-world polygons and centroid points
 
-### Prerequisites
-- **C++17 compiler** (g++, clang, MSVC)
-- **CMake 3.16+** (optional)
+Validation compares optimized stages to Stage 1 to ensure correctness.
 
-### Quick Start
+## Build and Run
 
-#### Using build script (Unix/Linux/WSL):
+Prerequisites:
+
+1. C++17 compiler
+2. Bash-compatible shell for `build.sh`
+
+Quick start:
+
 ```bash
-./build.sh
-./build/benchmark_m1
+bash build.sh
+bash -lc "./build/benchmark_m1"
 ```
-
-#### Using build script (Windows):
-```cmd
-build.bat
-build\benchmark_m1.exe
-```
-
-#### Manual compilation:
-```bash
-mkdir -p build
-cd build
-g++ -std=c++17 -I../include -c ../src/**/*.cpp
-g++ -std=c++17 build/*.o -o benchmark_m1
-./benchmark_m1
-```
-
-### Sample Output
-```
-=== Milestone 1: Sequential Baseline with Spatial Indexing ===
-
-Creating polygon grid (100x100)...
-  Polygons: 10000
-
-=== uniform distribution ===
-
-Dataset: 100000 points
-  Stage 1 (Brute force + BBox): 10756.42 pts/sec (9296.78 ms)
-  Stage 2 (Quadtree index): 138740.22 pts/sec (720.77 ms)
-  ✓ Speedup: 12.90x
-
-Dataset: 1000000 points
-  Stage 1 (Brute force + BBox): 9320.51 pts/sec (107290.30 ms)
-  Stage 2 (Quadtree index): 142346.72 pts/sec (7025.10 ms)
-  ✓ Speedup: 15.27x
-```
-
----
 
 ## Design Decisions
 
-### 1. **RayCasting Algorithm**
-Chosen for simplicity and correctness over sweep-line algorithms. Handles edge cases:
-- Points on polygon edges → classified as ON_BOUNDARY
-- Polygon holes → checked recursively
-- Numerical stability → epsilon tolerance (1e-10)
-
-### 2. **Quadtree over R-tree**
-- **Simpler implementation** (quad-based partitioning vs. heuristic node packing)
-- **Predictable structure** (always 4 children)
-- **Adequate performance** for this workload
-- Future: Can swap R-tree if needed without pipeline changes
-
-### 3. **Dataset Scale**
-- **10,000 polygons minimum** for realistic speedup measurement
-- 100×100 grid matches real-world city/zone scenarios
-- 100K–1M points representative of hourly geolocation data
-
-### 4. **Validation Strategy**
-- Both methods produce identical results
-- Correctness-first design: optimization doesn't compromise accuracy
-- All ray-casting edge cases tested
-
----
+1. Ray-casting selected for robust point-in-polygon correctness.
+2. Quadtree and Strip Index included to compare two different pruning strategies.
+3. Real-world GeoJSON stage included for data realism and integration validation.
+4. Milestone 1 remains sequential by design to establish baseline before parallel work.
 
 ## Experimental Methodology
 
-### Benchmark Configuration
-| Parameter | Value |
-|-----------|-------|
-| Polygon Grid | 100×100 (10,000 polygons) |
-| Point Datasets | 100K, 1M |
-| Distributions | Uniform, Clustered (Gaussian) |
-| QTree Threshold | 10 polygons/leaf |
-| QTree Max Depth | 8 |
-| Measurements | 3× runs, averaged |
+Configuration:
 
-### Metrics  
-- **Throughput**: Points classified per second
-- **Latency**: Total query time (excluding index build)
-- **Speedup**: Ratio of brute-force to optimized time
-- **Correctness**: 100% match between methods
-
----
-
-## Files Overview
-
-### Source Code Status
-
-| File | Status | Purpose |
-|------|--------|---------|
-| `src/index/quadtree.cpp` | Active | Main spatial index |
-| `src/index/bbox_filter.cpp` | Reference | Baseline for comparison |
-| `src/geometry/ray_casting.cpp` | Core | Geometric algorithm |
-| `src/benchmark_m1.cpp` | Running | Performance measurement |
-| `tests/test_ray_casting.cpp` | Validation | Correctness tests |
-| `src/generator/*` | Utility | Test data generation |
-
-### Documentation
-
-| File | Purpose |
-|------|---------|
-| `README.md` | This file |
-| `DELIVERABLES.md` | M1 requirements checklist |
-| `FILE_MAP.md` | Detailed file inventory |
-| `M2_ROADMAP.md` | Upcoming parallelization plan |
-| `MILESTONE_1.md` | Detailed M1 specification |
-
----
-
-
-## Key Algorithms
-
-### Ray-Casting (Point-in-Polygon)
-```
-1. Cast ray from point to infinity (horizontal)
-2. Count edge crossings
-3. Even count → OUTSIDE, Odd count → INSIDE
-4. Handle edge cases: vertex crossing, horizontal edges
-```
-**Complexity**: O(V) where V = polygon vertices  
-**Accuracy**: Exact (with epsilon tolerance)
-
-### Quadtree Build
-```
-1. Start with root bbox encompassing all polygons
-2. For each polygon:
-   - Insert into appropriate leaf node
-   - If leaf exceeds threshold:
-     - Split into 4 children
-     - Redistribute polygons to overlapping children
-```
-**Complexity**: O(P log P) amortized  
-**Space**: O(P) for polygon storage + O(N) for tree nodes
-
-### Quadtree Query
-```
-1. Start at root
-2. If point inside node bbox:
-   - If leaf: collect all polygon IDs
-   - If internal: recurse into child containing point
-3. Handle boundary: check multiple children if point on split line
-4. Return deduplicated candidate list
-```
-**Complexity**: O(log D) where D = tree depth
-
----
+1. Polygon grid: 100 x 100 (10,000 polygons)
+2. Point datasets: 100K and 1M
+3. Distributions: uniform and clustered
+4. Metrics: throughput, latency, speedup, build cost, correctness
 
 ## Troubleshooting
 
-### Build Issues
+1. If build fails, verify compiler/toolchain availability and C++17 support.
+2. If results look unexpectedly slow, confirm optimization flags are active in `build.sh`.
+3. If real-data stage does not run, verify `pak_admin2.geojson` and `pak_admincentroids.geojson` are present in project root.
 
-**Issue**: `M_PI` not defined (Windows MSVC)  
-**Solution**: Already handled in `polygon_loader.cpp` with `#ifndef M_PI` guard
+## Documentation
 
-**Issue**: CMake can't find compiler  
-**Solution**: Use provided `build.sh` or `build.bat` scripts
+Detailed Week 1 implementation notes are available in:
 
-**Issue**: Benchmark runs slow  
-**Solution**: Verify `-O2` or `-O3` optimization flags in compilation
-
-### Runtime Issues
-
-**Issue**: Results don't match between methods  
-**Solution**: Floating-point precision — check epsilon tolerance in `ray_casting.cpp`
-
-**Issue**: Quadtree slower than brute force  
-**Solution**: Polygon count too low (~100-1000). Use ≥10K polygons for measurable speedup.
-
----
-
-## References
-
-- Point-in-Polygon Algorithms: [Shimrat (1962)](https://en.wikipedia.org/wiki/Point_in_polygon)
-- Quadtrees: [Same (1984)](https://en.wikipedia.org/wiki/Quadtree)
-- Spatial Indexing: [Gaede & Günther (1998)](https://en.wikipedia.org/wiki/Spatial_database)
-
----
-
+1. `Week1_completion.md`
