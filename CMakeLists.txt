@@ -34,6 +34,8 @@ add_library(pip_core
     src/geometry/ray_casting.cpp
     src/index/bbox_filter.cpp
     src/index/quadtree.cpp
+    src/index/strip_index.cpp
+    src/index/geojson_loader.cpp
 )
 target_include_directories(pip_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 if(Boost_FOUND)
@@ -45,6 +47,7 @@ add_library(pip_generators
     src/generator/uniform_distribution.cpp
     src/generator/clustered_distribution.cpp
     src/generator/polygon_loader.cpp
+    src/generator/geojson_loader.cpp
 )
 target_link_libraries(pip_generators PUBLIC pip_core)
 
