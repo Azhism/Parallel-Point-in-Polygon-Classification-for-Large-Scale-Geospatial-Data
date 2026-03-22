@@ -1,78 +1,180 @@
-# Implementation Summary
+# Week 1 Implementation Summary (Detailed)
 
-## Overview
+## 1. Purpose of Week 1
 
-This file summarizes the current state of the project after Milestone 1 cleanup and real-world data integration.
+Week 1 establishes the sequential baseline for point-in-polygon classification before parallelization milestones.
 
-Current benchmark stages:
+Primary goals completed:
 
-1. Stage 1: Brute force + bounding-box filtering
-2. Stage 2: Quadtree index
-3. Stage 3: Strip Index
-4. Stage 4: Real-world GeoJSON benchmark
+1. Build a correct geometric classifier (ray-casting with edge-case handling).
+2. Build spatial pruning/indexing structures for faster candidate lookup.
+3. Integrate real-world GeoJSON polygon + point datasets.
+4. Benchmark baseline and indexed approaches on synthetic + real data.
+5. Validate that optimized pipelines match baseline classification results.
 
-Spatial Hash has been removed from active code paths.
+## 2. Final Week 1 Pipeline
 
-## What Is Implemented
+Implemented in `src/benchmark_m1.cpp`:
 
-### Geometry and Classification
+1. Stage 1: Brute force + bounding-box filter
+2. Stage 2: Quadtree index + ray-casting verification
+3. Stage 3: Strip Index + ray-casting verification
+4. Stage 4: Real-world benchmark using GeoJSON
 
-1. Point, Polygon, BBox primitives
-2. Ray-casting point-in-polygon with boundary handling
-3. Polygon holes and MultiPolygon expansion support
+Spatial Hash path was removed from active code during Week 1 cleanup and replaced with Strip Index.
 
-### Indexing
+## 3. Code Components Implemented and Used
 
-1. BBox filter baseline
-2. Quadtree index
-3. Strip Index
+### 3.1 Geometry Layer
 
-### Data
+Key files:
 
-1. Synthetic generators:
-1. Uniform distribution
-2. Clustered distribution
-2. Real-world loaders from GeoJSON:
-1. Polygon boundaries
-2. Centroid points
+1. `include/geometry/point.hpp`
+2. `include/geometry/polygon.hpp`
+3. `include/geometry/ray_casting.hpp`
+4. `src/geometry/ray_casting.cpp`
 
-## Active Data Files
+What it does:
 
-1. `pak_admin2.geojson`
-2. `pak_admincentroids.geojson`
+1. Defines `Point`, `BBox`, `Polygon`, and `MultiPolygon` structures.
+2. Computes polygon bounding boxes.
+3. Performs robust point-in-polygon classification via ray-casting.
+4. Handles boundary conditions (edge/vertex cases) and holes.
 
-Current observed load counts:
+### 3.2 Candidate Pruning / Indexing Layer
 
-1. 204 polygons (MultiPolygon-expanded)
+Key files:
+
+1. `include/index/bbox_filter.hpp`, `src/index/bbox_filter.cpp`
+2. `include/index/quadtree.hpp`, `src/index/quadtree.cpp`
+3. `include/index/strip_index.hpp`, `src/index/strip_index.cpp`
+
+What each index does:
+
+1. BBox filter:
+1. Linear scan over all polygon bboxes.
+2. Used as baseline pruning in Stage 1.
+
+2. Quadtree:
+1. Builds a spatial hierarchy over polygon bbox extents.
+2. Splits nodes recursively when leaf threshold is exceeded.
+3. Queries candidate polygons by descending relevant quadrants.
+4. Deduplicates candidates using set-based accumulation.
+
+3. Strip Index:
+1. Computes global `y_min`, `y_max` from polygons.
+2. Chooses strip count (default `sqrt(num_polygons)` when unspecified).
+3. Assigns each polygon id to all strips overlapped by its bbox.
+4. For query point `p`, maps `p.y` to strip index and returns that strip�s candidate list.
+
+### 3.3 Synthetic Data Generation Layer
+
+Key files:
+
+1. `include/generator/distribution.hpp`
+2. `src/generator/uniform_distribution.cpp`
+3. `src/generator/clustered_distribution.cpp`
+4. `include/generator/polygon_loader.hpp`
+5. `src/generator/polygon_loader.cpp`
+
+What it does:
+
+1. Generates uniform and clustered point sets.
+2. Builds synthetic polygon grid (100 x 100 -> 10,000 polygons).
+
+### 3.4 Real-World GeoJSON Layer
+
+Key files:
+
+1. `include/index/geojson_loader.hpp`
+2. `src/index/geojson_loader.cpp`
+3. `include/nlohmann/json.hpp`
+
+What it does:
+
+1. Loads Polygon and MultiPolygon geometries from GeoJSON.
+2. Expands MultiPolygon into individual `Polygon` objects.
+3. Extracts centroid points from multiple schemas:
+1. `center_lon` / `center_lat`
+2. `x_coord` / `y_coord`
+3. Point geometry coordinates fallback
+4. Applies robust numeric parsing for numeric/string coordinate values.
+
+## 4. Core Classification Logic in Benchmark
+
+Main execution flow in `src/benchmark_m1.cpp`:
+
+1. Build synthetic polygon grid (`PolygonLoader::create_grid`).
+2. For each distribution (`uniform`, `clustered`) and dataset size (`100K`, `1M`):
+1. Generate points.
+2. Stage 1:
+1. `BBoxFilter::get_candidates(point, polygons)`
+2. Ray-cast candidates via `classify_point_from_candidates`
+3. Stage 2:
+1. Build `QuadTreeIndex`
+2. Query candidates per point, classify via ray-casting
+4. Stage 3:
+1. Build `StripIndex`
+2. Query strip candidates per point, classify via ray-casting
+5. Validate Stage 2 and Stage 3 outputs against Stage 1.
+3. Run Stage 4 real-world benchmark:
+1. Load polygons from `pak_admin2.geojson`
+2. Load points from `pak_admincentroids.geojson`
+3. Run Stage 1 and Stage 2 on real data
+4. Validate Stage 2 against Stage 1
+
+Helper function:
+
+1. `classify_point_from_candidates(...)`:
+1. Iterates candidate polygon ids.
+2. Uses `RayCaster::point_in_polygon`.
+3. Returns first containing polygon id or `UINT64_MAX` if no match.
+
+## 5. Additional Large-Scale Mode (Code Path)
+
+`benchmark_m1.cpp` includes `--large` / `--large-scale` mode:
+
+1. Point counts switch to 10M and 100M.
+2. Processing is batched to keep memory bounded.
+3. Brute-force stage is skipped in this mode.
+4. Compares Quadtree and Strip Index directly.
+5. Tracks mismatches between indexed methods.
+
+Note: Week 1 standard reporting remains focused on 100K/1M and real-data correctness.
+
+## 6. Real-World Data Integrated in Week 1
+
+Active files used by Stage 4:
+
+1. `pak_admin2.geojson` (polygons)
+2. `pak_admincentroids.geojson` (points)
+
+Observed load counts in current run set:
+
+1. 204 polygons (after MultiPolygon expansion)
 2. 745 centroid points
 
-## Current Source Layout
+## 7. Build, Test, and Run Status
 
-```text
-include/
-  geometry/: point, polygon, ray casting headers
-  generator/: synthetic point and polygon generation headers
-  index/: bbox filter, quadtree, strip index, geojson loader headers
-  nlohmann/: json.hpp
-
-src/
-  benchmark_m1.cpp
-  geometry/: point, polygon, ray casting implementations
-  generator/: uniform, clustered, polygon loader implementations
-  index/: bbox_filter, quadtree, strip_index, geojson_loader implementations
-
-tests/
-  test_ray_casting.cpp
-```
-
-## Build and Run
+Build command:
 
 ```bash
 bash build.sh
+```
+
+Benchmark command:
+
+```bash
 bash -lc "./build/benchmark_m1"
 ```
 
-## Latest Benchmark Snapshot
+Validation/test status completed in Week 1:
+
+1. Build script compiles core objects and benchmark successfully.
+2. Ray-casting unit tests run and pass (`./build/test_ray_casting`).
+3. Benchmark completes through synthetic + real-world sections.
+
+## 8. Latest Week 1 Benchmark Snapshot
 
 Source: `output_strip_index_clean.txt`
 
@@ -96,8 +198,3 @@ Source: `output_strip_index_clean.txt`
 2. Stage 2 (Quadtree): 19.74 ms
 3. Speedup: 1.08x
 
-## Notes
-
-1. Week 1 focuses on correctness and sequential baseline performance.
-2. Synthetic data is used for scale behavior in milestone benchmarking.
-3. Real-world data stage is used for realism and integration validation.
