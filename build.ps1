@@ -1,5 +1,6 @@
 $ErrorActionPreference = "Stop"
 $OUTDIR = "build"
+$STACK_FLAGS = "-Wl,--stack,67108864"
 mkdir -Force $OUTDIR | Out-Null
 
 Write-Host "[*] Compiling core library..."
@@ -25,7 +26,7 @@ Write-Host "[*] Compiling unit tests..."
 g++ -O3 -std=c++17 -I./include -Wall -Wextra -fopenmp tests/test_ray_casting.cpp $OUTDIR/libpip_core.a -fopenmp -o $OUTDIR/test_ray_casting
 
 Write-Host "[*] Compiling benchmarks..."
-g++ -O3 -std=c++17 -I./include -Wall -Wextra -fopenmp src/benchmark_m1.cpp $OUTDIR/libpip_core.a -fopenmp -o $OUTDIR/benchmark_m1
-g++ -O3 -std=c++17 -I./include -Wall -Wextra -fopenmp src/benchmark_m2.cpp $OUTDIR/libpip_core.a -fopenmp -o $OUTDIR/benchmark_m2
+g++ -O3 -std=c++17 -I./include -Wall -Wextra -fopenmp src/benchmark_m1.cpp $OUTDIR/libpip_core.a -fopenmp $STACK_FLAGS -o $OUTDIR/benchmark_m1
+g++ -O3 -std=c++17 -I./include -Wall -Wextra -fopenmp src/benchmark_m2.cpp $OUTDIR/libpip_core.a -fopenmp $STACK_FLAGS -o $OUTDIR/benchmark_m2
 
 Write-Host "[*] Build completed successfully!"

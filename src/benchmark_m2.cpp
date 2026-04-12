@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <numeric>
 #include <cmath>
+#include <fstream>
 #include <omp.h>
 
 #include "geometry/ray_casting.hpp"
@@ -21,6 +22,43 @@ using namespace pdc_gen;
 using namespace std::chrono;
 
 static double ns_to_ms(long long ns) { return ns / 1e6; }
+
+static bool file_exists(const std::string& path) {
+    std::ifstream f(path);
+    return f.good();
+}
+
+static std::string parent_dir(const std::string& path) {
+    const size_t slash = path.find_last_of("/\\");
+    if (slash == std::string::npos) return "";
+    return path.substr(0, slash);
+}
+
+static std::pair<std::string, std::string> resolve_realworld_geojson_paths(const std::string& executable_path) {
+    std::vector<std::string> roots;
+    roots.push_back(".");
+
+    if (!executable_path.empty()) {
+        std::string exe_dir = parent_dir(executable_path);
+        if (!exe_dir.empty()) {
+            roots.push_back(exe_dir);
+            std::string repo_dir = parent_dir(exe_dir);
+            if (!repo_dir.empty()) {
+                roots.push_back(repo_dir);
+            }
+        }
+    }
+
+    for (const auto& root : roots) {
+        const std::string poly = root + "/pak_admin2.geojson";
+        const std::string points = root + "/pak_admincentroids.geojson";
+        if (file_exists(poly) && file_exists(points)) {
+            return {poly, points};
+        }
+    }
+
+    return {"", ""};
+}
 
 // ============================================================
 // Morton-sort preprocessing (for fair Tiled benchmarking)
@@ -402,7 +440,15 @@ static void run_benchmark(
         thread_scaling_table(points, polygons, index);
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    bool real_only_mode = false;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--real-only") {
+            real_only_mode = true;
+        }
+    }
+
     std::cout << "============================================================\n";
     std::cout << "=== Milestone 2: Parallel Point-in-Polygon Classification ===\n";
     std::cout << "============================================================\n";
@@ -416,6 +462,9 @@ int main() {
     std::cout << "  - Hybrid       : Static blocks + dynamic overflow (Stage 6)\n";
     std::cout << "  Timing: Tiled+Morton reports both classify-only and end-to-end.\n";
     std::cout << "============================================================\n\n";
+    if (real_only_mode) {
+        std::cout << "Running REAL-ONLY mode (synthetic benchmark skipped).\n\n";
+    }
 
     const double X_MIN = 0.0, X_MAX = 100.0, Y_MIN = 0.0, Y_MAX = 100.0;
 
@@ -431,25 +480,62 @@ int main() {
         std::cout << "  Quadtree built in " << ns_to_ms(ns) << " ms\n";
     }
 
-    std::cout << "\n============================================================\n";
-    std::cout << "=== SYNTHETIC BENCHMARK ===\n";
-    std::cout << "============================================================\n";
+    if (!real_only_mode) {
+        std::cout << "\n============================================================\n";
+        std::cout << "=== SYNTHETIC BENCHMARK ===\n";
+        std::cout << "============================================================\n";
 
-    std::vector<size_t> sizes = { 100000, 1000000 };
-    for (size_t n : sizes) {
-        auto u = UniformDistribution::generate(n, X_MIN, X_MAX, Y_MIN, Y_MAX);
-        run_benchmark("uniform", u, polygons, index);
+        std::vector<size_t> sizes = { 100000, 1000000 };
+        for (size_t n : sizes) {
+            auto u = UniformDistribution::generate(n, X_MIN, X_MAX, Y_MIN, Y_MAX);
+            run_benchmark("uniform", u, polygons, index);
 
-        auto c = ClusteredDistribution::generate(n, 5, X_MIN, X_MAX, Y_MIN, Y_MAX, 0.015);
-        run_benchmark("clustered", c, polygons, index);
+            auto c = ClusteredDistribution::generate(n, 5, X_MIN, X_MAX, Y_MIN, Y_MAX, 0.015);
+            run_benchmark("clustered", c, polygons, index);
+        }
     }
 
     std::cout << "\n============================================================\n";
     std::cout << "=== REAL-WORLD DATA BENCHMARK ===\n";
     std::cout << "============================================================\n";
     try {
-        auto real_polys  = GeoJSONLoader::load_polygons_from_geojson("pak_admin2.geojson");
-        auto real_points = GeoJSONLoader::load_centroids_from_geojson("pak_admincentroids.geojson");
+        std::cout << "  Attempting to load real-world data...\n";
+
+        std::string poly_path;
+        std::string point_path;
+        try {
+            const std::string executable_path =
+                (argc > 0 && argv != nullptr && argv[0] != nullptr) ? argv[0] : "";
+            auto resolved = resolve_realworld_geojson_paths(executable_path);
+            poly_path = resolved.first;
+            point_path = resolved.second;
+        } catch (const std::exception& e) {
+            std::cout << "  Path resolver error: " << e.what() << "\n";
+            poly_path.clear();
+            point_path.clear();
+        } catch (...) {
+            std::cout << "  Path resolver unknown error\n";
+            poly_path.clear();
+            point_path.clear();
+        }
+
+        if (!poly_path.empty() && !point_path.empty()) {
+            std::cout << "  Using: " << poly_path << "\n";
+            std::cout << "  Using: " << point_path << "\n";
+        } else {
+            std::cout << "  Using fallback relative paths from current working directory.\n";
+        }
+
+        std::cout << "  Loading polygons...\n";
+        auto real_polys  = GeoJSONLoader::load_polygons_from_geojson(
+            poly_path.empty() ? "pak_admin2.geojson" : poly_path);
+        std::cout << "  Loaded polygons: " << real_polys.size() << "\n";
+
+        std::cout << "  Loading centroid points...\n";
+        auto real_points = GeoJSONLoader::load_centroids_from_geojson(
+            point_path.empty() ? "pak_admincentroids.geojson" : point_path);
+        std::cout << "  Loaded points: " << real_points.size() << "\n";
+
         if (!real_polys.empty() && !real_points.empty()) {
             std::cout << "  Loaded " << real_polys.size() << " polygons, "
                       << real_points.size() << " points\n";
@@ -461,6 +547,8 @@ int main() {
         }
     } catch (const std::exception& e) {
         std::cout << "  [SKIP] " << e.what() << "\n";
+    } catch (...) {
+        std::cout << "  [SKIP] Unknown non-standard error in real-world benchmark\n";
     }
 
     std::cout << "\n============================================================\n";

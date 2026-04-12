@@ -17,7 +17,7 @@ Primary goals completed:
 3. Build dynamic OpenMP load-balanced strategy
 4. Build tiled + Morton-sorted cache-optimized strategy
 5. Build true work-stealing classifier
-6. Benchmark all strategies on synthetic and real-world data
+6. Benchmark all strategies on synthetic data
 7. Validate correctness of parallel implementations
 8. Analyze thread scaling and efficiency
 9. **Bonus**: Implement Hybrid (Static + Dynamic) OpenMP scheduling
@@ -83,11 +83,6 @@ Primary goals completed:
 
 ### 4. Data Integration
 
-**Real-world data:**
-- Pakistan administrative polygons: 204 regions
-- Centroid points: 745 locations
-- Successfully loads, classifies, and validates
-
 **Synthetic data:**
 - Uniform distribution (100K, 1M points)
 - Clustered distribution (100K, 1M points)
@@ -97,7 +92,7 @@ Primary goals completed:
 
 ## Benchmark Results (Week 2 - Final - April 12, 2026)
 
-> **System:** 8 hardware threads  
+> **System:** 4 hardware threads  
 > **Methodology:** Min-of-3 (with 1 warmup) for strategy benchmarks; **Median-of-7** for thread-scaling tables  
 > **Thread-scaling baseline:** 1-thread Dynamic OMP time (not sequential stage time)
 
@@ -119,34 +114,32 @@ Timing: Tiled+Morton reports both classify-only and end-to-end.
 #### 100K Points
 | Strategy | Time | Throughput | Speedup |
 |----------|------|-----------|---------|
-| Sequential | 77.41 ms | 1,291,744 pts/sec | — |
-| Static OMP | 18.82 ms | 5,312,310 pts/sec | 4.11× |
-| Dynamic OMP | 17.95 ms | 5,570,658 pts/sec | **4.31×** ⭐ |
-| Tiled+Morton (e2e) | 26.54 ms | 3,768,366 pts/sec | 2.92× |
-| Work-Stealing | 19.02 ms | 5,257,181 pts/sec | 4.07× |
-| **Hybrid (Static+Dynamic)** | **16.51 ms** | **6,055,908 pts/sec** | **4.24×** |
+| Sequential | 74.42 ms | 1,343,648.97 pts/sec | — |
+| Static OMP | 38.68 ms | 2,585,248.57 pts/sec | 1.92× |
+| Dynamic OMP | 40.36 ms | 2,477,571.78 pts/sec | 1.84× |
+| Tiled+Morton (e2e) | 43.02 ms | 2,324,619.11 pts/sec | 1.73× |
+| **Work-Stealing** | **38.43 ms** | **2,602,303.04 pts/sec** | **1.94×** ⭐ |
+| Hybrid (Static+Dynamic) | 39.03 ms | 2,561,954.46 pts/sec | 1.91× |
 
 #### 1M Points
 | Strategy | Time | Throughput | Speedup |
 |----------|------|-----------|---------|
-| Sequential | 934.84 ms | 1,069,702 pts/sec | — |
-| Static OMP | 204.19 ms | 4,897,421 pts/sec | 4.58× |
-| Dynamic OMP | 195.05 ms | 5,126,795 pts/sec | 4.79× |
-| Tiled+Morton (e2e) | 333.13 ms | 3,001,810 pts/sec | 2.81× |
-| Work-Stealing | 206.20 ms | 4,849,740 pts/sec | 4.53× |
-| **Hybrid (Static+Dynamic)** | **193.83 ms** | **5,159,189 pts/sec** | **4.82×** ⭐ |
+| Sequential | 771.88 ms | 1,295,530.28 pts/sec | — |
+| **Static OMP** | **392.61 ms** | **2,547,067.90 pts/sec** | **1.97×** ⭐ |
+| Dynamic OMP | 401.49 ms | 2,490,720.20 pts/sec | 1.92× |
+| Tiled+Morton (e2e) | 505.45 ms | 1,978,448.76 pts/sec | 1.53× |
+| Work-Stealing | 395.62 ms | 2,527,658.27 pts/sec | 1.95× |
+| Hybrid (Static+Dynamic) | 403.59 ms | 2,477,756.56 pts/sec | 1.91× |
 
 #### Thread Scaling (1M Uniform, Dynamic OMP, median-of-7)
 | Threads | Time (ms) | Speedup | Efficiency |
 |---------|-----------|---------|-----------|
-| 1 | 1059.36 | 1.00× | 100.0% |
-| 2 | 494.09 | 2.14× | 107.2% |
-| 4 | 293.16 | 3.61× | 90.3% |
-| 6 | 223.51 | 4.74× | 79.0% |
-| 8 | 198.06 | 5.35× | 66.9% |
+| 1 | 770.22 | 1.00× | 100.0% |
+| 2 | 493.65 | 1.56× | 78.0% |
+| 4 | 404.45 | 1.90× | 47.6% |
 
-**Analysis:** 2→4 thread scaling is excellent (2.14× → 3.61×).  
-Efficiency: 90.3% at 4 threads — parallelization overhead is low. Eliminating cold cache effects restored physically valid scaling characteristics.
+**Analysis:** 2→4 thread scaling is sub-linear (1.56× → 1.90×).  
+Root cause from benchmark notes: quadtree lookup is memory-bound, so additional threads increase memory bandwidth contention.
 
 ---
 
@@ -155,48 +148,32 @@ Efficiency: 90.3% at 4 threads — parallelization overhead is low. Eliminating 
 #### 100K Points
 | Strategy | Time | Throughput | Speedup |
 |----------|------|-----------|---------|
-| Sequential | 66.94 ms | 1,493,888 pts/sec | — |
-| Static OMP | 18.15 ms | 5,511,068 pts/sec | 3.69× |
-| Dynamic OMP | 16.46 ms | 6,076,810 pts/sec | 4.07× |
-| Tiled+Morton (e2e) | 27.67 ms | 3,613,695 pts/sec | 2.42× |
-| Work-Stealing | 16.37 ms | 6,107,131 pts/sec | 4.09× |
-| **Hybrid (Static+Dynamic)** | **16.48 ms** | **6,067,482 pts/sec** | **4.13×** ⭐ |
+| Sequential | 45.64 ms | 2,190,954.86 pts/sec | — |
+| Static OMP | 30.58 ms | 3,270,250.21 pts/sec | 1.49× |
+| Dynamic OMP | 30.62 ms | 3,265,668.68 pts/sec | 1.49× |
+| Tiled+Morton (e2e) | 39.81 ms | 2,511,931.68 pts/sec | 1.15× |
+| Work-Stealing | 34.27 ms | 2,917,757.18 pts/sec | 1.33× |
+| **Hybrid (Static+Dynamic)** | **30.23 ms** | **3,308,245.80 pts/sec** | **1.51×** ⭐ |
 
 #### 1M Points
 | Strategy | Time | Throughput | Speedup |
 |----------|------|-----------|---------|
-| Sequential | 723.93 ms | 1,381,352 pts/sec | — |
-| Static OMP | 180.84 ms | 5,529,850 pts/sec | 4.00× |
-| Dynamic OMP | 177.76 ms | 5,625,581 pts/sec | 4.07× |
-| Tiled+Morton (e2e) | 332.66 ms | 3,006,056 pts/sec | 2.18× |
-| Work-Stealing | 181.98 ms | 5,495,103 pts/sec | 3.98× |
-| **Hybrid (Static+Dynamic)** | **174.54 ms** | **5,729,253 pts/sec** | **4.15×** ⭐ |
+| Sequential | 513.52 ms | 1,947,333.21 pts/sec | — |
+| Static OMP | 294.68 ms | 3,393,473.60 pts/sec | 1.74× |
+| **Dynamic OMP** | **291.89 ms** | **3,425,968.08 pts/sec** | **1.76×** ⭐ |
+| Tiled+Morton (e2e) | 493.89 ms | 2,024,731.28 pts/sec | 1.04× |
+| Work-Stealing | 301.92 ms | 3,312,152.12 pts/sec | 1.70× |
+| Hybrid (Static+Dynamic) | 302.05 ms | 3,310,664.11 pts/sec | 1.70× |
 
 #### Thread Scaling (1M Clustered, Dynamic OMP, median-of-7)
 | Threads | Time (ms) | Speedup | Efficiency |
 |---------|-----------|---------|-----------|
-| 1 | 781.49 | 1.00× | 100.0% |
-| 2 | 436.97 | 1.79× | 89.4% |
-| 4 | 254.46 | 3.07× | 76.8% |
-| 6 | 193.40 | 4.04× | 67.3% |
-| 8 | 183.13 | 4.27× | 53.3% |
+| 1 | 604.22 | 1.00× | 100.0% |
+| 2 | 519.50 | 1.16× | 58.2% |
+| 4 | 342.07 | 1.77× | 44.2% |
 
-**Analysis:** 2→4 thread scaling is good (1.79× → 3.07×).  
-Efficiency: 76.8% at 4 threads — good scaling on clustered data; load balancing benefits visible.
-
----
-
-### Real-World Data (Pakistan, 745 Points, 204 Polygons)
-
-| Strategy | Time | Throughput | Speedup |
-|----------|------|-----------|---------|
-| Sequential | 32.78 ms | 22,728 pts/sec | — |
-| Static OMP | 35.90 ms | 20,754 pts/sec | 0.91× |
-| Dynamic OMP | 30.60 ms | 24,346 pts/sec | 1.07× |
-| Tiled+Morton (e2e) | 29.30 ms | 25,427 pts/sec | 1.12× |
-| **Work-Stealing** | **6.39 ms** | **116,603 pts/sec** | **5.13×** ⭐ |
-
-**Note:** Work-Stealing dominates on small real-world data due to minimal overhead structure. On only 745 points, this result exhibits some measurement sensitivity — the min-of-3 timing captures a consistently fast execution path.
+**Analysis:** 2→4 thread scaling is sub-linear (1.16× → 1.77×).  
+Efficiency: 44.2% at 4 threads, indicating overhead and memory effects are significant for this workload shape.
 
 ---
 
@@ -207,7 +184,7 @@ Efficiency: 76.8% at 4 threads — good scaling on clustered data; load balancin
 - **Solution:** Use the **1-thread Dynamic OMP time** as the scaling baseline. Ensures 1-thread efficiency = 100.0% exactly, and all subsequent efficiencies are honest relative measures.
 
 ### Fix B: Median-of-7 Timing
-- **Problem:** Min-of-3 allowed OS scheduling spikes to create non-monotonic anomalies (e.g., 6 threads faster than 8 threads by a large margin).
+- **Problem:** Min-of-3 allowed OS scheduling spikes to create non-monotonic anomalies (e.g., 2-thread runs occasionally approaching 4-thread timings unexpectedly).
 - **Solution:** Collect **7 timed runs** and take the **median**. Robust against single-run OS outliers while still reflecting achievable performance.
 
 ### Fix C: Double Cache Warmup (Pre-loop)
@@ -234,16 +211,15 @@ All parallel implementations produce identical results to sequential baseline.
 **Milestone 2 Status:** ✓ COMPLETE
 
 **Key Achievements:**
-- Up to **4.89×** speedup on 1M uniform points (Static OMP, 8 threads)
-- Up to **4.38×** speedup on 1M clustered points (Dynamic OMP, 8 threads)
+- Up to **1.97×** speedup on 1M uniform points (Static OMP, 4 threads)
+- Up to **1.76×** speedup on 1M clustered points (Dynamic OMP, 4 threads)
 - **Monotonic, honest thread-scaling** tables with proper efficiency metrics
-- Memory bottleneck identified: Quadtree random-access patterns cap scaling below 8× on 8 threads
+- Memory bottleneck identified: Quadtree random-access patterns cap scaling on 4-thread system
 - All 20 correctness validations pass (zero mismatches)
 
 **Remaining Notes:**
-- Tiled+Morton sort cost dominates for 1M points — classify-only speedup exceeds 8× but end-to-end is limited by O(n log n) sort
-- Uniform and clustered distributions scale similarly; clustered slightly better due to load-balancing benefit
-- Real-world data (745 points) is too small for reliable parallelization benchmarking
+- Tiled+Morton sort cost dominates for 1M points — classify-only throughput is higher, but end-to-end gain is limited by O(n log n) sorting overhead
+- Uniform and clustered distributions both show sub-linear scaling from 2 to 4 threads on this machine due to memory bandwidth pressure
 
 ## Files Modified/Created
 

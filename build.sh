@@ -5,6 +5,7 @@ set -e
 
 CXXFLAGS="-O3 -std=c++17 -I./include -Wall -Wextra -fopenmp"
 LDFLAGS="-fopenmp"
+STACK_FLAGS="-Wl,--stack,67108864"
 OUTDIR="build"
 
 mkdir -p $OUTDIR
@@ -33,8 +34,8 @@ echo "[*] Compiling unit tests..."
 g++ $CXXFLAGS tests/test_ray_casting.cpp $OUTDIR/libpip_core.a $LDFLAGS -o $OUTDIR/test_ray_casting
 
 echo "[*] Compiling benchmarks..."
-g++ $CXXFLAGS src/benchmark_m1.cpp $OUTDIR/libpip_core.a $LDFLAGS -o $OUTDIR/benchmark_m1
-g++ $CXXFLAGS src/benchmark_m2.cpp $OUTDIR/libpip_core.a $LDFLAGS -o $OUTDIR/benchmark_m2
+g++ $CXXFLAGS src/benchmark_m1.cpp $OUTDIR/libpip_core.a $LDFLAGS $STACK_FLAGS -o $OUTDIR/benchmark_m1
+g++ $CXXFLAGS src/benchmark_m2.cpp $OUTDIR/libpip_core.a $LDFLAGS $STACK_FLAGS -o $OUTDIR/benchmark_m2
 
 echo "[*] Build completed successfully!"
 echo "Run: $OUTDIR/test_ray_casting"

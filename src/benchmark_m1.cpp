@@ -32,6 +32,43 @@ struct LargeScaleMetrics {
     uint64_t mismatches = 0;
 };
 
+static bool file_exists(const std::string& path) {
+    std::ifstream f(path);
+    return f.good();
+}
+
+static std::string parent_dir(const std::string& path) {
+    const size_t slash = path.find_last_of("/\\");
+    if (slash == std::string::npos) return "";
+    return path.substr(0, slash);
+}
+
+std::pair<std::string, std::string> resolve_realworld_geojson_paths(const std::string& executable_path) {
+    std::vector<std::string> roots;
+    roots.push_back(".");
+
+    if (!executable_path.empty()) {
+        std::string exe_dir = parent_dir(executable_path);
+        if (!exe_dir.empty()) {
+            roots.push_back(exe_dir);
+            std::string repo_dir = parent_dir(exe_dir);
+            if (!repo_dir.empty()) {
+                roots.push_back(repo_dir);
+            }
+        }
+    }
+
+    for (const auto& root : roots) {
+        const std::string poly = root + "/pak_admin2.geojson";
+        const std::string points = root + "/pak_admincentroids.geojson";
+        if (file_exists(poly) && file_exists(points)) {
+            return {poly, points};
+        }
+    }
+
+    return {"", ""};
+}
+
 uint64_t classify_point_from_candidates(const Point& point,
                                         const std::vector<Polygon>& polygons,
                                         const std::vector<uint64_t>& candidates) {
@@ -221,10 +258,13 @@ int main(int argc, char* argv[]) {
     std::cout << "=== Milestone 1: Sequential Baseline with Spatial Indexing ===" << std::endl;
 
     bool large_scale_mode = false;
+    bool real_only_mode = false;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--large" || arg == "--large-scale") {
             large_scale_mode = true;
+        } else if (arg == "--real-only") {
+            real_only_mode = true;
         }
     }
     
@@ -241,6 +281,9 @@ int main(int argc, char* argv[]) {
         std::cout << "Running LARGE-SCALE mode (10M-100M points, batched indexed processing)." << std::endl;
         std::cout << "Brute-force stage is skipped in this mode to keep runtime practical." << std::endl;
     }
+    if (real_only_mode) {
+        std::cout << "Running REAL-ONLY mode (synthetic benchmark skipped)." << std::endl;
+    }
     
     // Create polygon grid (100x100 = 10,000 polygons)
     std::cout << "Creating polygon grid (100x100)..." << std::endl;
@@ -251,11 +294,12 @@ int main(int argc, char* argv[]) {
     );
     std::cout << "  Polygons: " << polygons.size() << std::endl;
     
-    // Benchmark for each dataset
-    for (const auto& dist_type : distributions) {
-        std::cout << "=== " << dist_type << " distribution ===" << std::endl;
-        
-        for (size_t num_points : point_counts) {
+    if (!real_only_mode) {
+        // Benchmark for each dataset
+        for (const auto& dist_type : distributions) {
+            std::cout << "=== " << dist_type << " distribution ===" << std::endl;
+            
+            for (size_t num_points : point_counts) {
             std::cout << "Dataset: " << num_points << " points" << std::endl;
 
             if (large_scale_mode) {
@@ -352,9 +396,10 @@ int main(int argc, char* argv[]) {
             validate_results(results_brute, results_quadtree);
             validate_results(results_brute, results_strip);
 
-            std::cout << std::endl;
-        }
+                std::cout << std::endl;
+            }
 
+        }
     }
 
     std::cout << std::string(60, '=') << std::endl;
@@ -367,10 +412,42 @@ int main(int argc, char* argv[]) {
     std::cout << std::string(60, '=') << std::endl;
     
     try {
-        // Try to load real Pakistan administrative data
         std::cout << "Attempting to load real-world data..." << std::endl;
-        auto real_polygons = GeoJSONLoader::load_polygons_from_geojson("pak_admin2.geojson");
-        auto real_points = GeoJSONLoader::load_centroids_from_geojson("pak_admincentroids.geojson");
+
+        std::string poly_path;
+        std::string point_path;
+        try {
+            const std::string executable_path =
+                (argc > 0 && argv != nullptr && argv[0] != nullptr) ? argv[0] : "";
+            auto resolved = resolve_realworld_geojson_paths(executable_path);
+            poly_path = resolved.first;
+            point_path = resolved.second;
+        } catch (const std::exception& e) {
+            std::cerr << "  Path resolver error: " << e.what() << std::endl;
+            poly_path.clear();
+            point_path.clear();
+        } catch (...) {
+            std::cerr << "  Path resolver unknown error" << std::endl;
+            poly_path.clear();
+            point_path.clear();
+        }
+
+        if (!poly_path.empty() && !point_path.empty()) {
+            std::cout << "  Using: " << poly_path << std::endl;
+            std::cout << "  Using: " << point_path << std::endl;
+        } else {
+            std::cout << "  Using fallback relative paths from current working directory." << std::endl;
+        }
+
+        std::cout << "  Loading polygons..." << std::endl;
+        auto real_polygons = GeoJSONLoader::load_polygons_from_geojson(
+            poly_path.empty() ? "pak_admin2.geojson" : poly_path);
+        std::cout << "  Loaded polygons: " << real_polygons.size() << std::endl;
+
+        std::cout << "  Loading centroid points..." << std::endl;
+        auto real_points = GeoJSONLoader::load_centroids_from_geojson(
+            point_path.empty() ? "pak_admincentroids.geojson" : point_path);
+        std::cout << "  Loaded points: " << real_points.size() << std::endl;
         
         if (!real_polygons.empty() && !real_points.empty()) {
             std::cout << "✓ Successfully loaded real data" << std::endl;
@@ -412,6 +489,9 @@ int main(int argc, char* argv[]) {
         }
     } catch (const std::exception& e) {
         std::cout << "⚠ Error loading real-world data: " << e.what() << std::endl;
+        std::cout << "   Continuing with synthetic data results only." << std::endl;
+    } catch (...) {
+        std::cout << "⚠ Unknown non-standard error while loading real-world data." << std::endl;
         std::cout << "   Continuing with synthetic data results only." << std::endl;
     }
     
