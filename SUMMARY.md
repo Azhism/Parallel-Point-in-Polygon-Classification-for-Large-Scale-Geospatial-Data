@@ -1,6 +1,7 @@
 # Project Summary: Parallel Point-in-Polygon Classification
 
-**Last Updated:** April 12, 2026 - Radix Sort Optimization Complete ✅
+**Last Updated:** April 12, 2026 - Radix Sort Optimization Complete ✅  
+**Author:** Azhab Babar (Azhism)
 
 ## Week 1 Implementation Summary (Detailed)
 
