@@ -51,6 +51,13 @@ add_library(pip_generators
 )
 target_link_libraries(pip_generators PUBLIC pip_core)
 
+# Parallel library (classifiers)
+add_library(pip_parallel
+    src/parallel/parallel_classifier.cpp
+    src/parallel/work_stealing_classifier.cpp
+)
+target_link_libraries(pip_parallel PUBLIC pip_core)
+
 # Unit tests
 enable_testing()
 add_executable(test_ray_casting tests/test_ray_casting.cpp)
@@ -61,6 +68,10 @@ add_test(NAME RayCastingTests COMMAND test_ray_casting)
 add_executable(benchmark_m1 src/benchmark_m1.cpp)
 target_link_libraries(benchmark_m1 PUBLIC pip_core pip_generators)
 
+# Milestone 2 benchmark
+add_executable(benchmark_m2 src/benchmark_m2.cpp)
+target_link_libraries(benchmark_m2 PUBLIC pip_core pip_generators pip_parallel)
+
 # Install targets
-install(TARGETS pip_core pip_generators LIBRARY DESTINATION lib)
+install(TARGETS pip_core pip_generators pip_parallel LIBRARY DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)

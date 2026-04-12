@@ -149,27 +149,27 @@ Every optimized stage is checked against Stage 1 (brute-force baseline) for corr
 
 ## Latest Benchmark Snapshot
 
-Source: `output_strip_index_clean.txt`
+Source: Latest run (April 11, 2026)
 
 ### Uniform Distribution
 
 | Dataset | Brute Force + BBox | Quadtree | Strip Index | Quadtree Speedup | Strip Speedup |
 |---|---:|---:|---:|---:|---:|
-| 100K points | 2560.86 ms | 88.08 ms | 80.65 ms | 29.08x | 31.75x |
-| 1M points | 20064.42 ms | 773.39 ms | 672.40 ms | 25.94x | 29.84x |
+| 100K points | 1849.77 ms | 91.77 ms | 96.83 ms | 20.16x | 19.10x |
+| 1M points | 19147.03 ms | 617.48 ms | 703.29 ms | 31.01x | 27.23x |
 
 ### Clustered Distribution
 
 | Dataset | Brute Force + BBox | Quadtree | Strip Index | Quadtree Speedup | Strip Speedup |
 |---|---:|---:|---:|---:|---:|
-| 100K points | 1948.59 ms | 45.20 ms | 51.60 ms | 43.11x | 37.77x |
-| 1M points | 20937.39 ms | 666.83 ms | 765.08 ms | 31.40x | 27.37x |
+| 100K points | 2123.59 ms | 63.67 ms | 187.06 ms | 33.35x | 11.35x |
+| 1M points | 16063.64 ms | 289.97 ms | 514.42 ms | 55.40x | 31.23x |
 
 ### Real-World Data (745 Points)
 
-1. Stage 1 (Brute Force + BBox): 21.36 ms
-2. Stage 2 (Quadtree): 19.74 ms
-3. Speedup: 1.08x
+1. Stage 1 (Brute Force + BBox): 13.06 ms
+2. Stage 2 (Quadtree): 18.25 ms
+3. Speedup: 0.72x
 
 ## Notes
 

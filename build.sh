@@ -1,9 +1,10 @@
 #!/bin/bash
-# Build script for Milestone 1 - Point-in-Polygon Classification using g++
+# Build script for Point-in-Polygon Classification with Parallel Support
 
 set -e
 
-CXXFLAGS="-O3 -std=c++17 -I./include -Wall -Wextra"
+CXXFLAGS="-O3 -std=c++17 -I./include -Wall -Wextra -fopenmp"
+LDFLAGS="-fopenmp"
 OUTDIR="build"
 
 mkdir -p $OUTDIR
@@ -21,15 +22,21 @@ g++ $CXXFLAGS -c src/generator/uniform_distribution.cpp -o $OUTDIR/uniform_distr
 g++ $CXXFLAGS -c src/generator/clustered_distribution.cpp -o $OUTDIR/clustered_distribution.o
 g++ $CXXFLAGS -c src/generator/polygon_loader.cpp -o $OUTDIR/polygon_loader.o
 
+echo "[*] Compiling parallel library..."
+g++ $CXXFLAGS -c src/parallel/parallel_classifier.cpp -o $OUTDIR/parallel_classifier.o
+g++ $CXXFLAGS -c src/parallel/work_stealing_classifier.cpp -o $OUTDIR/work_stealing_classifier.o
+
 echo "[*] Creating static library..."
-ar rcs $OUTDIR/libpip_core.a $OUTDIR/point.o $OUTDIR/polygon.o $OUTDIR/ray_casting.o $OUTDIR/bbox_filter.o $OUTDIR/quadtree.o $OUTDIR/strip_index.o $OUTDIR/geojson_loader.o $OUTDIR/uniform_distribution.o $OUTDIR/clustered_distribution.o $OUTDIR/polygon_loader.o
+ar rcs $OUTDIR/libpip_core.a $OUTDIR/point.o $OUTDIR/polygon.o $OUTDIR/ray_casting.o $OUTDIR/bbox_filter.o $OUTDIR/quadtree.o $OUTDIR/strip_index.o $OUTDIR/geojson_loader.o $OUTDIR/uniform_distribution.o $OUTDIR/clustered_distribution.o $OUTDIR/polygon_loader.o $OUTDIR/parallel_classifier.o $OUTDIR/work_stealing_classifier.o
 
 echo "[*] Compiling unit tests..."
-g++ $CXXFLAGS tests/test_ray_casting.cpp $OUTDIR/libpip_core.a -o $OUTDIR/test_ray_casting
+g++ $CXXFLAGS tests/test_ray_casting.cpp $OUTDIR/libpip_core.a $LDFLAGS -o $OUTDIR/test_ray_casting
 
-echo "[*] Compiling benchmark..."
-g++ $CXXFLAGS src/benchmark_m1.cpp $OUTDIR/libpip_core.a -o $OUTDIR/benchmark_m1
+echo "[*] Compiling benchmarks..."
+g++ $CXXFLAGS src/benchmark_m1.cpp $OUTDIR/libpip_core.a $LDFLAGS -o $OUTDIR/benchmark_m1
+g++ $CXXFLAGS src/benchmark_m2.cpp $OUTDIR/libpip_core.a $LDFLAGS -o $OUTDIR/benchmark_m2
 
 echo "[*] Build completed successfully!"
 echo "Run: $OUTDIR/test_ray_casting"
 echo "Run: $OUTDIR/benchmark_m1"
+echo "Run: $OUTDIR/benchmark_m2"
