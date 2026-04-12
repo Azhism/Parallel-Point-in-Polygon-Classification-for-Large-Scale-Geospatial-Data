@@ -230,58 +230,74 @@ static std::pair<long long, long long> run_strategy_tiled_honest(
 static void thread_scaling_table(
     const std::vector<Point>&   points,
     const std::vector<Polygon>& polygons,
-    const QuadTreeIndex&        index,
-    long long                   seq_ns
+    const QuadTreeIndex&        index
 ) {
     int max_t = omp_get_max_threads();
-    std::cout << "\n  Thread-scaling (Dynamic strategy, avg of 3 runs):\n";
+    std::cout << "\n  Thread-scaling (Dynamic strategy, median of 7 runs):\n";
     std::cout << "  " << std::setw(10) << "Threads"
               << std::setw(16) << "Time (ms)"
               << std::setw(14) << "Speedup"
               << std::setw(14) << "Efficiency\n";
     std::cout << "  " << std::string(54, '-') << "\n";
     ParallelClassifier clf;
-    
-    std::vector<std::pair<int, double>> speedups;  // Store (threads, speedup) for analysis
-    
+
+    // Pre-loop cache warmup: ensure quadtree data is hot in cache
+    // before the 1-thread baseline measurement. Without this, the
+    // 1-thread run starts cold and appears slower than 2 threads,
+    // producing impossible >100% efficiency at 2 threads.
+    // Two runs needed: first populates L3, second stabilizes L2/L1.
+    omp_set_num_threads(1);
+    clf.classify(points, polygons, index, ParallelClassifier::Strategy::DYNAMIC_OMP, 1);
+    clf.classify(points, polygons, index, ParallelClassifier::Strategy::DYNAMIC_OMP, 1);
+
+    long long baseline_ns = 0;  // 1-thread time used as scaling baseline
+    std::vector<std::pair<int, double>> speedups;
+
     for (int t = 1; t <= max_t; t = (t == 1 ? 2 : t + 2)) {
         // EXPLICIT WARMUP — spin up thread pool with full-size input
-        // This ensures fair comparison between thread counts
         omp_set_num_threads(t);
         clf.classify(points, polygons, index, ParallelClassifier::Strategy::DYNAMIC_OMP, t);
-        
-        // Now do timed runs (pool is warmed up)
-        const int RUNS = 3;
+
+        // 7 timed runs for statistical stability (up from 3)
+        const int RUNS = 7;
         std::vector<long long> times_ns;
-        
+
         for (int r = 0; r < RUNS; ++r) {
             auto t0 = high_resolution_clock::now();
             clf.classify(points, polygons, index, ParallelClassifier::Strategy::DYNAMIC_OMP, t);
             long long ns = duration_cast<nanoseconds>(high_resolution_clock::now() - t0).count();
             times_ns.push_back(ns);
         }
-        
-        // Take minimum time (most stable measurement)
-        long long best_ns = *std::min_element(times_ns.begin(), times_ns.end());
-        double speedup = (double)seq_ns / best_ns;
+
+        // Use MEDIAN for robustness against OS scheduling outliers
+        std::sort(times_ns.begin(), times_ns.end());
+        long long median_ns = times_ns[RUNS / 2];
+
+        // Use 1-thread Dynamic OMP time as baseline (not sequential stage time)
+        // This prevents >100% efficiency artifacts from cache warming differences
+        if (t == 1) {
+            baseline_ns = median_ns;
+        }
+
+        double speedup = (double)baseline_ns / median_ns;
         double eff     = speedup / t * 100.0;
         speedups.push_back({t, speedup});
-        
+
         std::cout << "  " << std::setw(10) << t
-                  << std::setw(16) << std::fixed << std::setprecision(2) << ns_to_ms(best_ns)
+                  << std::setw(16) << std::fixed << std::setprecision(2) << ns_to_ms(median_ns)
                   << std::setw(13) << std::fixed << std::setprecision(2) << speedup << "x"
                   << std::setw(13) << std::fixed << std::setprecision(1) << eff << "%\n";
     }
-    
+
     // Analysis: memory contention at higher thread counts
     if (speedups.size() >= 3) {
         double speedup_2t = speedups[1].second;  // 2-thread speedup
         double speedup_4t = speedups[2].second;  // 4-thread speedup
-        
+
         std::cout << "\n  Analysis: 2->4 thread scaling is sub-linear ("
                   << std::fixed << std::setprecision(2) << speedup_2t << "x -> "
                   << speedup_4t << "x).\n";
-        
+
         if ((speedup_4t - speedup_2t) < 0.4) {
             std::cout << "  Root cause: Quadtree lookup is memory-bound (random access\n";
             std::cout << "  pattern). Extra threads increase RAM contention without\n";
@@ -374,8 +390,16 @@ static void run_benchmark(
         validate_work_stealing(seq_r, ws_r, "Work-Stealing");
     }
 
+    // Stage 6: Hybrid (static + dynamic)
+    std::vector<ClassificationResult> hybrid_r;
+    long long hybrid_ns = run_strategy("Stage 6  Hybrid (static+dynamic)",
+        ParallelClassifier::Strategy::HYBRID_OMP, points, polygons, index, 0, &hybrid_r);
+    std::cout << "    Speedup: " << std::fixed << std::setprecision(2)
+              << (double)seq_ns/hybrid_ns << "x\n";
+    validate(seq_r, hybrid_r, "Hybrid (static+dynamic)");
+
     if (points.size() >= 1000000)
-        thread_scaling_table(points, polygons, index, seq_ns);
+        thread_scaling_table(points, polygons, index);
 }
 
 int main() {
@@ -389,6 +413,7 @@ int main() {
     std::cout << "  - Dynamic OMP : Guided chunk distribution (approximates work-stealing)\n";
     std::cout << "  - Tiled+Morton: Z-order sort for cache locality + parallel classify\n";
     std::cout << "  - Work-Stealing: True per-thread deque stealing (Stage 5)\n";
+    std::cout << "  - Hybrid       : Static blocks + dynamic overflow (Stage 6)\n";
     std::cout << "  Timing: Tiled+Morton reports both classify-only and end-to-end.\n";
     std::cout << "============================================================\n\n";
 

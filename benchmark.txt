@@ -1,0 +1,226 @@
+﻿=== MILESTONE 1 ===
+=== Milestone 1: Sequential Baseline with Spatial Indexing ===
+Creating polygon grid (100x100)...
+  Polygons: 10000
+=== uniform distribution ===
+Dataset: 100000 points
+  Stage 1 (Brute force + BBox): 60421.48 pts/sec (1655.04 ms)
+  Stage 2 (Quadtree index): 1136124.79 pts/sec (88.02 ms) [build: 7.84 ms]
+    Speedup: 18.80x
+  Stage 3 (Strip Index): 1035076.68 pts/sec (96.61 ms) [build: 0.45 ms]
+    Speedup: 17.13x
+Ô£ô Results validated: all queries match.
+Ô£ô Results validated: all queries match.
+
+Dataset: 1000000 points
+  Stage 1 (Brute force + BBox): 61410.43 pts/sec (16283.88 ms)
+  Stage 2 (Quadtree index): 1145314.01 pts/sec (873.12 ms) [build: 7.02 ms]
+    Speedup: 18.65x
+  Stage 3 (Strip Index): 1027236.24 pts/sec (973.49 ms) [build: 0.40 ms]
+    Speedup: 16.73x
+Ô£ô Results validated: all queries match.
+Ô£ô Results validated: all queries match.
+
+=== clustered distribution ===
+Dataset: 100000 points
+  Stage 1 (Brute force + BBox): 62365.39 pts/sec (1603.45 ms)
+  Stage 2 (Quadtree index): 1374137.90 pts/sec (72.77 ms) [build: 8.71 ms]
+    Speedup: 22.03x
+  Stage 3 (Strip Index): 1079517.24 pts/sec (92.63 ms) [build: 0.86 ms]
+    Speedup: 17.31x
+Ô£ô Results validated: all queries match.
+Ô£ô Results validated: all queries match.
+
+Dataset: 1000000 points
+  Stage 1 (Brute force + BBox): 61439.52 pts/sec (16276.17 ms)
+  Stage 2 (Quadtree index): 1451848.08 pts/sec (688.78 ms) [build: 7.78 ms]
+    Speedup: 23.63x
+  Stage 3 (Strip Index): 1206248.75 pts/sec (829.02 ms) [build: 0.45 ms]
+    Speedup: 19.63x
+Ô£ô Results validated: all queries match.
+Ô£ô Results validated: all queries match.
+
+============================================================
+=== SYNTHETIC BENCHMARK COMPLETE ===
+============================================================
+============================================================
+=== REAL-WORLD DATA BENCHMARK ===
+============================================================
+Attempting to load real-world data...
+Ô£ô Loaded 204 polygons from pak_admin2.geojson
+Ô£ô Loaded 745 centroids from pak_admincentroids.geojson
+Ô£ô Successfully loaded real data
+  Polygons: 204
+  Points: 745
+Benchmarking on real Pakistan administrative data...
+  Stage 1 (Brute force + BBox): 26559.62 pts/sec (28.05 ms)
+  Stage 2 (Quadtree index): 24737.76 pts/sec (30.12 ms) [build: 0.37 ms]
+    Speedup: 0.93x
+Ô£ô Results validated: all queries match.
+============================================================
+=== Benchmark Complete ===
+============================================================
+
+=== MILESTONE 2 ===
+============================================================
+=== Milestone 2: Parallel Point-in-Polygon Classification ===
+============================================================
+Available threads: 8
+
+Strategy notes:
+  - Static OMP  : Equal chunks pre-divided at runtime start
+  - Dynamic OMP : Guided chunk distribution (approximates work-stealing)
+  - Tiled+Morton: Z-order sort for cache locality + parallel classify
+  - Work-Stealing: True per-thread deque stealing (Stage 5)
+  - Hybrid       : Static blocks + dynamic overflow (Stage 6)
+  Timing: Tiled+Morton reports both classify-only and end-to-end.
+============================================================
+
+
+Creating polygon grid (100x100)...
+  Polygons: 10000
+  Quadtree built in 8.5999 ms
+
+============================================================
+=== SYNTHETIC BENCHMARK ===
+============================================================
+
+Dataset: 100000 points  [uniform]
+--------------------------------------------------------------
+  Stage 1  Sequential               : 1161741.08 pts/sec  (86.08 ms)
+  Stage 2  Static OMP               : 5106052.71 pts/sec  (19.58 ms)
+    Speedup: 4.40x
+  [PASS] Validated: Static OMP matches sequential
+  Stage 3  Dynamic OMP              : 5256241.79 pts/sec  (19.02 ms)
+    Speedup: 4.52x
+  [PASS] Validated: Dynamic OMP matches sequential
+  Stage 4  Tiled+Morton OMP [classify]: 5630757.45 pts/sec  (17.76 ms)
+  Stage 4  Tiled+Morton OMP [end-to-end]: 3512407.58 pts/sec  (28.47 ms) [sort: 10.71ms]
+    Speedup: 3.02x
+  [PASS] Validated: Tiled+Morton OMP matches sequential
+  Stage 5  Work-Stealing            : 4702784.05 pts/sec  (21.26 ms)
+    Speedup: 4.05x
+  [PASS] Validated: Work-Stealing matches sequential
+  Stage 6  Hybrid (static+dynamic)  : 5233355.31 pts/sec  (19.11 ms)
+    Speedup: 4.50x
+  [PASS] Validated: Hybrid (static+dynamic) matches sequential
+
+Dataset: 100000 points  [clustered]
+--------------------------------------------------------------
+  Stage 1  Sequential               : 1427979.84 pts/sec  (70.03 ms)
+  Stage 2  Static OMP               : 5591684.05 pts/sec  (17.88 ms)
+    Speedup: 3.92x
+  [PASS] Validated: Static OMP matches sequential
+  Stage 3  Dynamic OMP              : 6070834.50 pts/sec  (16.47 ms)
+    Speedup: 4.25x
+  [PASS] Validated: Dynamic OMP matches sequential
+  Stage 4  Tiled+Morton OMP [classify]: 5982292.41 pts/sec  (16.72 ms)
+  Stage 4  Tiled+Morton OMP [end-to-end]: 3673809.78 pts/sec  (27.22 ms) [sort: 10.50ms]
+    Speedup: 2.57x
+  [PASS] Validated: Tiled+Morton OMP matches sequential
+  Stage 5  Work-Stealing            : 5435727.95 pts/sec  (18.40 ms)
+    Speedup: 3.81x
+  [PASS] Validated: Work-Stealing matches sequential
+  Stage 6  Hybrid (static+dynamic)  : 6055908.14 pts/sec  (16.51 ms)
+    Speedup: 4.24x
+  [PASS] Validated: Hybrid (static+dynamic) matches sequential
+
+Dataset: 1000000 points  [uniform]
+--------------------------------------------------------------
+  Stage 1  Sequential               : 1069702.11 pts/sec  (934.84 ms)
+  Stage 2  Static OMP               : 4897421.07 pts/sec  (204.19 ms)
+    Speedup: 4.58x
+  [PASS] Validated: Static OMP matches sequential
+  Stage 3  Dynamic OMP              : 5126795.92 pts/sec  (195.05 ms)
+    Speedup: 4.79x
+  [PASS] Validated: Dynamic OMP matches sequential
+  Stage 4  Tiled+Morton OMP [classify]: 5400101.63 pts/sec  (185.18 ms)
+  Stage 4  Tiled+Morton OMP [end-to-end]: 3001810.39 pts/sec  (333.13 ms) [sort: 147.95ms]
+    Speedup: 2.81x
+  [PASS] Validated: Tiled+Morton OMP matches sequential
+  Stage 5  Work-Stealing            : 4849740.49 pts/sec  (206.20 ms)
+    Speedup: 4.53x
+  [PASS] Validated: Work-Stealing matches sequential
+  Stage 6  Hybrid (static+dynamic)  : 5159189.37 pts/sec  (193.83 ms)
+    Speedup: 4.82x
+  [PASS] Validated: Hybrid (static+dynamic) matches sequential
+
+  Thread-scaling (Dynamic strategy, median of 7 runs):
+  Threads   Time (ms)       Speedup       Efficiency
+     ------------------------------------------------------
+  1         1059.36         1.00         x100.0        %
+  2         494.09          2.14         x107.2        %
+  4         293.16          3.61         x90.3         %
+  6         223.51          4.74         x79.0         %
+  8         198.06          5.35         x66.9         %
+
+  Analysis: 2->4 thread scaling is sub-linear (2.14x -> 3.61x).
+  Efficiency: 90.3% at 4 threads ÔÇö parallelization overhead
+  partially offsets gains at this dataset size.
+
+Dataset: 1000000 points  [clustered]
+--------------------------------------------------------------
+  Stage 1  Sequential               : 1381352.27 pts/sec  (723.93 ms)
+  Stage 2  Static OMP               : 5529850.96 pts/sec  (180.84 ms)
+    Speedup: 4.00x
+  [PASS] Validated: Static OMP matches sequential
+  Stage 3  Dynamic OMP              : 5625581.54 pts/sec  (177.76 ms)
+    Speedup: 4.07x
+  [PASS] Validated: Dynamic OMP matches sequential
+  Stage 4  Tiled+Morton OMP [classify]: 5536206.51 pts/sec  (180.63 ms)
+  Stage 4  Tiled+Morton OMP [end-to-end]: 3006056.00 pts/sec  (332.66 ms) [sort: 152.03ms]
+    Speedup: 2.18x
+  [PASS] Validated: Tiled+Morton OMP matches sequential
+  Stage 5  Work-Stealing            : 5495103.31 pts/sec  (181.98 ms)
+    Speedup: 3.98x
+  [PASS] Validated: Work-Stealing matches sequential
+  Stage 6  Hybrid (static+dynamic)  : 5729253.80 pts/sec  (174.54 ms)
+    Speedup: 4.15x
+  [PASS] Validated: Hybrid (static+dynamic) matches sequential
+
+  Thread-scaling (Dynamic strategy, median of 7 runs):
+  Threads   Time (ms)       Speedup       Efficiency
+     ------------------------------------------------------
+  1         781.49          1.00         x100.0        %
+  2         436.97          1.79         x89.4         %
+  4         254.46          3.07         x76.8         %
+  6         193.40          4.04         x67.3         %
+  8         183.13          4.27         x53.3         %
+
+  Analysis: 2->4 thread scaling is sub-linear (1.79x -> 3.07x).
+  Efficiency: 76.8% at 4 threads ÔÇö parallelization overhead
+  partially offsets gains at this dataset size.
+
+============================================================
+=== REAL-WORLD DATA BENCHMARK ===
+============================================================
+Ô£ô Loaded 204 polygons from pak_admin2.geojson
+Ô£ô Loaded 745 centroids from pak_admincentroids.geojson
+  Loaded 204 polygons, 745 points
+
+Dataset: 745 points  [real-world]
+--------------------------------------------------------------
+  Stage 1  Sequential               : 26756.02 pts/sec  (27.84 ms)
+  Stage 2  Static OMP               : 26144.57 pts/sec  (28.50 ms)
+    Speedup: 0.98x
+  [PASS] Validated: Static OMP matches sequential
+  Stage 3  Dynamic OMP              : 26875.13 pts/sec  (27.72 ms)
+    Speedup: 1.00x
+  [PASS] Validated: Dynamic OMP matches sequential
+  Stage 4  Tiled+Morton OMP [classify]: 25024.86 pts/sec  (29.77 ms)
+  Stage 4  Tiled+Morton OMP [end-to-end]: 24978.12 pts/sec  (29.83 ms) [sort: 0.06ms]
+    Speedup: 0.93x
+    Note: Morton reordering hurts clustered data ÔÇö spatial sort
+          destroys natural cluster locality that sequential already
+          exploits. End-to-end regression is expected here.
+  [PASS] Validated: Tiled+Morton OMP matches sequential
+  Stage 5  Work-Stealing            : 138702.71 pts/sec  (5.37 ms)
+    Speedup: 5.18x
+  [PASS] Validated: Work-Stealing matches sequential
+  Stage 6  Hybrid (static+dynamic)  : 27127.70 pts/sec  (27.46 ms)
+    Speedup: 1.01x
+  [PASS] Validated: Hybrid (static+dynamic) matches sequential
+
+============================================================
+=== Benchmark Complete ===
+============================================================

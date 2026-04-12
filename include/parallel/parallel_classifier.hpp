@@ -37,7 +37,8 @@ public:
         SEQUENTIAL,
         STATIC_OMP,
         DYNAMIC_OMP,
-        TILED
+        TILED,
+        HYBRID_OMP
     };
 
     static std::string strategy_name(Strategy s) {
@@ -46,6 +47,7 @@ public:
             case Strategy::STATIC_OMP:  return "Parallel (static)";
             case Strategy::DYNAMIC_OMP: return "Parallel (dynamic)";
             case Strategy::TILED:       return "Parallel (tiled+sorted)";
+            case Strategy::HYBRID_OMP:  return "Parallel (hybrid)";
         }
         return "Unknown";
     }
@@ -93,6 +95,13 @@ public:
     ) const;
 
     std::vector<ClassificationResult> classify_tiled(
+        const std::vector<Point>&   points,
+        const std::vector<Polygon>& polygons,
+        const QuadTreeIndex&        index,
+        int                         num_threads
+    ) const;
+
+    std::vector<ClassificationResult> classify_hybrid(
         const std::vector<Point>&   points,
         const std::vector<Polygon>& polygons,
         const QuadTreeIndex&        index,

@@ -6,6 +6,7 @@
 #include <numeric>
 #include <cmath>
 #include <limits>
+#include <atomic>
 
 namespace pdc_geo {
 
@@ -29,6 +30,8 @@ std::vector<ClassificationResult> ParallelClassifier::classify(
             return classify_dynamic(points, polygons, index, num_threads);
         case Strategy::TILED:
             return classify_tiled(points, polygons, index, num_threads);
+        case Strategy::HYBRID_OMP:
+            return classify_hybrid(points, polygons, index, num_threads);
     }
     return {};
 }
@@ -150,6 +153,71 @@ std::vector<ClassificationResult> ParallelClassifier::classify_dynamic(
     for (int i = 0; i < n; ++i) {
         results[i] = { static_cast<uint64_t>(i),
                        classify_one(points[i], polygons, index) };
+    }
+
+    return results;
+}
+
+// ============================================================
+// Strategy 6: Hybrid static + dynamic scheduling
+//
+// Combines the benefits of both approaches:
+//
+// Phase 1 (static): Each thread gets a pre-assigned block.
+//   No contention, no atomic operations, pure compute.
+//   For uniform data, this alone is sufficient.
+//
+// Phase 2 (dynamic overflow): Threads that finish Phase 1
+//   early pull remaining work from a shared atomic cursor.
+//   For clustered data, fast-finishing threads steal overflow
+//   instead of sitting idle.
+//
+// Expected behavior:
+//   Uniform data  → matches Static OMP (Phase 2 rarely fires)
+//   Clustered data → beats Static, approaches Dynamic
+// ============================================================
+
+std::vector<ClassificationResult> ParallelClassifier::classify_hybrid(
+    const std::vector<Point>&   points,
+    const std::vector<Polygon>& polygons,
+    const QuadTreeIndex&        index,
+    int                         num_threads
+) const {
+    if (num_threads > 0) omp_set_num_threads(num_threads);
+
+    const int n = static_cast<int>(points.size());
+    std::vector<ClassificationResult> results(n);
+
+    const int req_threads = (num_threads > 0) ? num_threads : omp_get_max_threads();
+    const int actual_threads = (n > 50000) ? req_threads : 1;
+
+    // Static block size: 80% of work is pre-divided equally
+    // Remaining 20% goes into the dynamic overflow pool
+    const int static_total = (n * 4) / 5;  // 80% static
+    const int static_chunk = static_total / actual_threads;
+
+    // Dynamic overflow pool starts right after static portion
+    std::atomic<int> overflow_cursor{static_total};
+
+    #pragma omp parallel num_threads(actual_threads)
+    {
+        int tid = omp_get_thread_num();
+
+        // Phase 1: static portion — zero contention
+        int lo = tid * static_chunk;
+        int hi = (tid == actual_threads - 1) ? static_total : lo + static_chunk;
+        for (int i = lo; i < hi; ++i) {
+            results[i] = { static_cast<uint64_t>(i),
+                           classify_one(points[i], polygons, index) };
+        }
+
+        // Phase 2: dynamic overflow — early finishers steal remaining work
+        while (true) {
+            int i = overflow_cursor.fetch_add(1, std::memory_order_relaxed);
+            if (i >= n) break;
+            results[i] = { static_cast<uint64_t>(i),
+                           classify_one(points[i], polygons, index) };
+        }
     }
 
     return results;
