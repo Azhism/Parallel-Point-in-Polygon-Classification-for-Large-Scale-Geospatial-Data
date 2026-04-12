@@ -23,9 +23,10 @@ Classifying 1 million points against 10,000 polygons with naive ray-casting is e
 
 Spatial indexing is required to keep candidate checks small and maintain high throughput.
 
-## Results
+## Project Status
 
-### Milestone 1: Sequential Baseline
+✅ **Week 2 Complete** - April 12, 2026  
+All parallel optimizations finalized with radix sort activation and honest benchmarking.
 
 Benchmark: 100 x 100 polygon grid (10,000 polygons)
 
