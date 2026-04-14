@@ -251,11 +251,14 @@ int main(int argc, char* argv[]) {
         std::cout << "Strong scaling: Run with mpirun -np 1,2,4,8 on fixed point count.\n";
         std::cout << "Weak scaling: Scale points proportionally with ranks.\n\n";
 
-        std::cout << "Recommended runs for full analysis:\n";
-        std::cout << "  OMP_NUM_THREADS=8 mpirun -np 1 ./build/benchmark_m3\n";
-        std::cout << "  OMP_NUM_THREADS=4 mpirun -np 2 ./build/benchmark_m3\n";
-        std::cout << "  OMP_NUM_THREADS=2 mpirun -np 4 ./build/benchmark_m3\n";
-        std::cout << "  OMP_NUM_THREADS=1 mpirun -np 8 ./build/benchmark_m3\n";
+        int total_cores = num_ranks * omp_get_max_threads();
+        std::cout << "Recommended runs for full analysis (adjust for your core count):\n";
+        std::cout << "  OMP_NUM_THREADS=" << total_cores << " mpirun -np 1 ./build/benchmark_m3\n";
+        if (total_cores >= 2)
+            std::cout << "  OMP_NUM_THREADS=" << total_cores/2 << " mpirun -np 2 ./build/benchmark_m3\n";
+        if (total_cores >= 4)
+            std::cout << "  OMP_NUM_THREADS=" << total_cores/4 << " mpirun -np 4 ./build/benchmark_m3\n";
+        std::cout << "  OMP_NUM_THREADS=1 mpirun -np " << total_cores << " ./build/benchmark_m3\n";
         std::cout << "\nFor 100M points: add --100m flag\n";
 
         std::cout << "\n============================================================\n";

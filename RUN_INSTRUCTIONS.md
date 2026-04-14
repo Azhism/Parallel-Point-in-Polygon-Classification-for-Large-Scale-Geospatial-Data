@@ -99,23 +99,30 @@ Run Milestone 2 benchmark:
 Run Milestone 3 MPI benchmark:
 
 ```bash
-# MPI correctness test
-mpirun -np 2 --oversubscribe ./build/test_mpi_classifier
+# MPI correctness test (use 2 or more ranks)
+mpirun -np 2 ./build/test_mpi_classifier
 
-# 2 ranks x 4 threads (recommended for 8-core machine)
-OMP_NUM_THREADS=4 mpirun -np 2 --oversubscribe ./build/benchmark_m3
+# Basic distributed benchmark
+mpirun -np 2 ./build/benchmark_m3
 
-# 4 ranks x 2 threads
-OMP_NUM_THREADS=2 mpirun -np 4 --oversubscribe ./build/benchmark_m3
+# For scaling analysis, vary ranks and threads to match your core count.
+# Example for a 4-core machine:
+#   OMP_NUM_THREADS=4 mpirun -np 1 ./build/benchmark_m3    (baseline)
+#   OMP_NUM_THREADS=2 mpirun -np 2 ./build/benchmark_m3
+#   OMP_NUM_THREADS=1 mpirun -np 4 ./build/benchmark_m3    (pure MPI)
+#
+# Example for an 8-core machine:
+#   OMP_NUM_THREADS=8 mpirun -np 1 ./build/benchmark_m3    (baseline)
+#   OMP_NUM_THREADS=4 mpirun -np 2 ./build/benchmark_m3
+#   OMP_NUM_THREADS=2 mpirun -np 4 ./build/benchmark_m3
+#   OMP_NUM_THREADS=1 mpirun -np 8 ./build/benchmark_m3    (pure MPI)
 
-# Include 100M point benchmark (takes longer)
-OMP_NUM_THREADS=2 mpirun -np 4 --oversubscribe ./build/benchmark_m3 --100m
-
-# Pure MPI mode (no OpenMP)
-OMP_NUM_THREADS=1 mpirun -np 8 --oversubscribe ./build/benchmark_m3
+# Include 100M point benchmark (takes longer, needs ~4GB RAM)
+mpirun -np 2 ./build/benchmark_m3 --100m
 ```
 
-Note: `--oversubscribe` allows more ranks than physical cores (useful on a single machine).
+Note: If you get an error about oversubscribing, add `--oversubscribe` to the mpirun command.
+On Windows with MS-MPI, use `mpiexec` instead of `mpirun`.
 
 ---
 

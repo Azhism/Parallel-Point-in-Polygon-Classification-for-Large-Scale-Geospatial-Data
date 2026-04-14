@@ -1,27 +1,59 @@
 #!/bin/bash
 # Build script for Point-in-Polygon Classification with Parallel Support
+# Supports: Linux (GCC), macOS (Homebrew GCC), WSL
 
 set -e
 
-# Detect compiler: prefer g++-15/14/13 (GCC with native OpenMP) over Apple Clang
-CXX="g++"
-for candidate in g++-15 g++-14 g++-13; do
-    if command -v "$candidate" &> /dev/null; then
-        CXX="$candidate"
-        break
+# ============================================================
+# Compiler detection
+# ============================================================
+# On macOS: Apple Clang lacks -fopenmp, so we need Homebrew GCC (g++-15/14/13)
+# On Linux/WSL: plain g++ IS GCC and supports -fopenmp natively
+
+detect_compiler() {
+    # Try versioned GCC first (needed on macOS)
+    for candidate in g++-15 g++-14 g++-13 g++-12; do
+        if command -v "$candidate" &> /dev/null; then
+            echo "$candidate"
+            return
+        fi
+    done
+
+    # Check if plain g++ supports OpenMP (true on Linux, false on macOS Apple Clang)
+    if command -v g++ &> /dev/null; then
+        if g++ -fopenmp -x c++ -E - < /dev/null &> /dev/null; then
+            echo "g++"
+            return
+        fi
     fi
-done
+
+    echo ""
+}
+
+CXX=$(detect_compiler)
+
+if [[ -z "$CXX" ]]; then
+    echo "[ERROR] No C++ compiler with OpenMP support found."
+    echo "  macOS: brew install gcc"
+    echo "  Linux: sudo apt install g++    (or yum install gcc-c++)"
+    echo "  WSL:   sudo apt install g++"
+    exit 1
+fi
+
 echo "[*] Using compiler: $CXX ($($CXX --version | head -1))"
 
 CXXFLAGS="-O3 -std=c++17 -I./include -Wall -Wextra -fopenmp"
 LDFLAGS="-fopenmp"
-# Stack flag only works on Linux linker; skip on macOS
-if [[ "$(uname)" == "Darwin" ]]; then
-    STACK_FLAGS=""
-else
-    STACK_FLAGS="-Wl,--stack,67108864"
-fi
 OUTDIR="build"
+
+# Stack size flag: GNU ld on Linux supports --stack, macOS does not
+STACK_FLAGS=""
+if [[ "$(uname)" == "Linux" ]]; then
+    # Check if linker supports --stack (GNU ld does, lld may not)
+    if $CXX -Wl,--stack,67108864 -x c++ -o /dev/null - <<< "int main(){}" &> /dev/null; then
+        STACK_FLAGS="-Wl,--stack,67108864"
+    fi
+fi
 
 mkdir -p $OUTDIR
 
@@ -60,29 +92,50 @@ echo "Run: $OUTDIR/benchmark_m2"
 # ============================================================
 # Milestone 3: MPI distributed targets (conditional)
 # ============================================================
-# Detect MPI: get compile/link flags from mpicxx, but use our $CXX compiler
-# This ensures OpenMP works (mpicxx wraps Apple Clang which lacks -fopenmp)
 if command -v mpicxx &> /dev/null; then
     echo ""
     echo "[*] MPI detected"
-    MPI_CFLAGS=$(mpicxx --showme:compile 2>/dev/null)
-    MPI_LDFLAGS=$(mpicxx --showme:link 2>/dev/null)
-    MPICXXFLAGS="$CXXFLAGS $MPI_CFLAGS"
-    MPI_LINK="$LDFLAGS $MPI_LDFLAGS"
+
+    # Get MPI compile/link flags
+    # Open MPI uses --showme, MPICH uses -show
+    MPI_CFLAGS=""
+    MPI_LDFLAGS=""
+    if mpicxx --showme:compile &> /dev/null; then
+        # Open MPI
+        MPI_CFLAGS=$(mpicxx --showme:compile 2>/dev/null)
+        MPI_LDFLAGS=$(mpicxx --showme:link 2>/dev/null)
+    elif mpicxx -show &> /dev/null; then
+        # MPICH — parse flags from full compile command
+        MPI_SHOW=$(mpicxx -show 2>/dev/null)
+        MPI_CFLAGS=$(echo "$MPI_SHOW" | grep -oP '(-I\S+)' | tr '\n' ' ')
+        MPI_LDFLAGS=$(echo "$MPI_SHOW" | grep -oP '(-L\S+|-l\S+|-Wl,\S+)' | tr '\n' ' ')
+    fi
+
+    # If we got MPI flags, use our GCC compiler with them (ensures OpenMP works)
+    # If not, fall back to mpicxx directly
+    if [[ -n "$MPI_CFLAGS" || -n "$MPI_LDFLAGS" ]]; then
+        MPICXX="$CXX"
+        MPICXXFLAGS="$CXXFLAGS $MPI_CFLAGS"
+        MPI_LINK="$LDFLAGS $MPI_LDFLAGS"
+    else
+        MPICXX="mpicxx"
+        MPICXXFLAGS="$CXXFLAGS"
+        MPI_LINK="$LDFLAGS"
+    fi
 
     echo "[*] Compiling MPI distributed library..."
-    $CXX $MPICXXFLAGS -c src/distributed/mpi_types.cpp -o $OUTDIR/mpi_types.o
-    $CXX $MPICXXFLAGS -c src/distributed/mpi_classifier.cpp -o $OUTDIR/mpi_classifier.o
-    $CXX $MPICXXFLAGS -c src/distributed/spatial_partitioner.cpp -o $OUTDIR/spatial_partitioner.o
+    $MPICXX $MPICXXFLAGS -c src/distributed/mpi_types.cpp -o $OUTDIR/mpi_types.o
+    $MPICXX $MPICXXFLAGS -c src/distributed/mpi_classifier.cpp -o $OUTDIR/mpi_classifier.o
+    $MPICXX $MPICXXFLAGS -c src/distributed/spatial_partitioner.cpp -o $OUTDIR/spatial_partitioner.o
 
     echo "[*] Compiling MPI test..."
-    $CXX $MPICXXFLAGS tests/test_mpi_classifier.cpp \
+    $MPICXX $MPICXXFLAGS tests/test_mpi_classifier.cpp \
         $OUTDIR/mpi_types.o $OUTDIR/mpi_classifier.o $OUTDIR/spatial_partitioner.o \
         $OUTDIR/libpip_core.a \
         $MPI_LINK -o $OUTDIR/test_mpi_classifier
 
     echo "[*] Compiling MPI benchmark..."
-    $CXX $MPICXXFLAGS src/benchmark_m3.cpp \
+    $MPICXX $MPICXXFLAGS src/benchmark_m3.cpp \
         $OUTDIR/mpi_types.o $OUTDIR/mpi_classifier.o $OUTDIR/spatial_partitioner.o \
         $OUTDIR/libpip_core.a \
         $MPI_LINK -o $OUTDIR/benchmark_m3
@@ -90,9 +143,12 @@ if command -v mpicxx &> /dev/null; then
     echo "[*] MPI targets built successfully!"
     echo "Run: mpirun -np 2 $OUTDIR/test_mpi_classifier"
     echo "Run: mpirun -np 4 $OUTDIR/benchmark_m3"
-    echo "Run: OMP_NUM_THREADS=2 mpirun -np 4 $OUTDIR/benchmark_m3"
 else
     echo ""
-    echo "[!] mpicxx not found — skipping MPI targets."
-    echo "    Install: brew install open-mpi (macOS) or apt install libopenmpi-dev (Linux)"
+    echo "[!] mpicxx not found — skipping MPI targets (M1 and M2 still work)."
+    echo "    Install MPI:"
+    echo "      macOS:  brew install open-mpi"
+    echo "      Ubuntu: sudo apt install libopenmpi-dev openmpi-bin"
+    echo "      Fedora: sudo dnf install openmpi-devel"
+    echo "      WSL:    sudo apt install libopenmpi-dev openmpi-bin"
 fi
