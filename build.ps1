@@ -30,3 +30,32 @@ g++ -O3 -std=c++17 -I./include -Wall -Wextra -fopenmp src/benchmark_m1.cpp $OUTD
 g++ -O3 -std=c++17 -I./include -Wall -Wextra -fopenmp src/benchmark_m2.cpp $OUTDIR/libpip_core.a -fopenmp $STACK_FLAGS -o $OUTDIR/benchmark_m2
 
 Write-Host "[*] Build completed successfully!"
+
+# Milestone 3: MPI distributed targets (conditional)
+$mpiFound = $false
+try {
+    $null = Get-Command mpicxx -ErrorAction Stop
+    $mpiFound = $true
+} catch {}
+
+if ($mpiFound) {
+    Write-Host ""
+    Write-Host "[*] MPI detected — compiling distributed targets..."
+    $MPICXXFLAGS = "-O3 -std=c++17 -I./include -Wall -Wextra -fopenmp"
+
+    mpicxx $MPICXXFLAGS.Split(" ") -c src/distributed/mpi_types.cpp -o $OUTDIR/mpi_types.o
+    mpicxx $MPICXXFLAGS.Split(" ") -c src/distributed/mpi_classifier.cpp -o $OUTDIR/mpi_classifier.o
+    mpicxx $MPICXXFLAGS.Split(" ") -c src/distributed/spatial_partitioner.cpp -o $OUTDIR/spatial_partitioner.o
+
+    Write-Host "[*] Compiling MPI test..."
+    mpicxx $MPICXXFLAGS.Split(" ") tests/test_mpi_classifier.cpp $OUTDIR/mpi_types.o $OUTDIR/mpi_classifier.o $OUTDIR/spatial_partitioner.o $OUTDIR/libpip_core.a -fopenmp -o $OUTDIR/test_mpi_classifier
+
+    Write-Host "[*] Compiling MPI benchmark..."
+    mpicxx $MPICXXFLAGS.Split(" ") src/benchmark_m3.cpp $OUTDIR/mpi_types.o $OUTDIR/mpi_classifier.o $OUTDIR/spatial_partitioner.o $OUTDIR/libpip_core.a -fopenmp -o $OUTDIR/benchmark_m3
+
+    Write-Host "[*] MPI targets built! Run: mpirun -np 4 .\build\benchmark_m3"
+} else {
+    Write-Host ""
+    Write-Host "[!] mpicxx not found — skipping MPI targets."
+    Write-Host "    Install MS-MPI or OpenMPI for distributed execution."
+}

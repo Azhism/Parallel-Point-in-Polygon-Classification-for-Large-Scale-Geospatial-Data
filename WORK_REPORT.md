@@ -1,9 +1,9 @@
 # Work Report: Point-in-Polygon Classification Project
 
 **Project:** Parallel Point-in-Polygon Classification for Large-Scale Geospatial Data  
-**Status:** Week 2 Complete — Thread-Scaling Methodology Corrected (April 12, 2026)  
-**Date:** April 12, 2026  
-**Milestone:** Milestone 2 (Parallel Optimization)
+**Status:** Week 3 Complete — Distributed MPI Execution (April 14, 2026)  
+**Date:** April 14, 2026  
+**Milestone:** Milestone 3 (Scalable Batch Processing and Distributed Execution)
 
 ---
 
@@ -100,34 +100,43 @@
 
 ---
 
+### Week 3 — Distributed MPI Execution
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| **MPI type registration** | ✓ Complete | Custom datatypes for Point and ClassificationResult |
+| **Polygon serialization** | ✓ Complete | Serialize/deserialize polygons for MPI broadcast/send |
+| **Spatial partitioner** | ✓ Complete | Strip and grid decomposition, polygon filtering with overlap |
+| **MPI classifier (replicate)** | ✓ Complete | Broadcast polygons, scatter points, gather results |
+| **MPI classifier (partition)** | ✓ Complete | Filter polygons per region, renumber IDs for quadtree |
+| **Batch processing** | ✓ Complete | 10M batches for 100M+ point support |
+| **Correctness tests** | ✓ Complete | All modes pass with 2 and 4 MPI ranks |
+| **Benchmark harness** | ✓ Complete | Full matrix: sizes x distributions x polygon modes |
+| **Build system** | ✓ Complete | Conditional MPI compilation in build.sh, CMakeLists.txt, build.ps1 |
+
+**Files:** `include/distributed/`, `src/distributed/`, `src/benchmark_m3.cpp`, `tests/test_mpi_classifier.cpp`
+
+---
+
 ## What Is Remaining
 
-### High Priority
+All three milestones are functionally complete.
 
-1. Refine workload partitioning to improve memory locality for quadtree-heavy paths.
-2. Add more focused profiling (cache misses, memory bandwidth, hotspot attribution) to guide the next optimization step.
-3. Expand automated test coverage for edge cases in polygon boundaries and multipolygon hole handling.
+### Optional Enhancements
 
-### Medium Priority
-
-1. Improve documentation of strategy-selection guidance (when to prefer static, dynamic, hybrid, or work-stealing).
-2. Add reproducibility notes for benchmark environment settings (thread affinity, power profile, background load).
-3. Consolidate report files so milestone narrative and benchmark artifacts stay synchronized.
-
-### Optional / Stretch
-
-1. Evaluate alternative spatial indexing strategies or quadtree layout changes to reduce random memory access.
-2. Investigate SIMD-friendly geometric kernels for candidate polygon checks.
-3. Add larger synthetic scenarios to stress-test scalability beyond current baseline sizes.
+1. Multi-node distributed benchmarking (requires cluster access)
+2. SIMD vectorization for ray-casting
+3. Alternative spatial indexing (R-tree) for comparison
+4. Profiling-guided cache optimization for quadtree traversal
 
 ---
 
 ## Current Status Snapshot
 
-1. Milestone 1: Complete.
-2. Milestone 2: Functionally complete and validated on synthetic datasets.
-3. Main risk: Memory-bound behavior limits near-linear thread scaling.
-4. Next focus: Profiling-guided optimization and stronger reproducibility/testing discipline.
+1. Milestone 1: Complete — sequential baseline with 3 spatial indices.
+2. Milestone 2: Complete — 5 OpenMP parallel strategies, thread scaling analysis.
+3. Milestone 3: Complete — distributed MPI execution, batch processing, scalability analysis.
+4. All correctness tests pass across all milestones.
 
 ## Build & Run
 
@@ -153,15 +162,18 @@ bash build.sh
 |-------|--------|--------|
 | `build.sh` requires WSL on Windows | Medium | Mitigated by `build.ps1` (PowerShell equivalent) |
 | Tiled+Morton sort cost dominates at 1M+ points | Low | Documented; honest e2e timing reported |
-| Memory-bound quadtree traversal limits scaling at higher threads | Medium | Identified; profiling and locality improvements planned |
+| Memory-bound quadtree traversal limits scaling at higher threads | Medium | Identified as shared memory bandwidth bottleneck |
+| Spatial strip partitioning causes load imbalance on clustered data | Medium | Documented; replication mode handles this better |
+| All MPI ranks on same machine limits distributed scaling demonstration | Low | Analysis notes that true gains require multi-node |
 
 ---
 
 ## Conclusion
 
-**Week 2 is complete and verified (April 12, 2026).**
+**All three milestones are complete and verified (April 14, 2026).**
 
-1. Five parallel strategies are implemented and integrated into one benchmark pipeline.
-2. Core correctness is validated across synthetic workloads.
-3. Major technical risk is understood: memory behavior, not compute, is the primary limiter at higher parallelism.
-4. The project is ready for a next phase focused on profiling-driven optimization and test/report hardening.
+1. Sequential baseline with 3 spatial indices (quadtree achieves 55x speedup on clustered data).
+2. Five OpenMP parallel strategies validated and benchmarked with thread scaling analysis.
+3. Distributed MPI execution with hybrid MPI+OpenMP, batch processing for 100M points, and two polygon distribution modes.
+4. Core correctness validated across all strategies, distributions, and rank configurations.
+5. Key trade-offs analyzed: polygon replication vs partitioning, communication vs computation overhead.

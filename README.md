@@ -25,8 +25,8 @@ Spatial indexing is required to keep candidate checks small and maintain high th
 
 ## Project Status
 
-✅ **Week 2 Complete** - April 12, 2026  
-All parallel optimizations finalized with radix sort activation and honest benchmarking.
+✅ **Week 3 Complete** - April 14, 2026  
+Distributed MPI execution with batch processing, spatial partitioning, and scalability analysis.
 
 Benchmark: 100 x 100 polygon grid (10,000 polygons)
 
@@ -116,6 +116,24 @@ Four parallelization strategies on 4 threads using OpenMP, with honest timing (F
 - Clarifies that Dynamic OMP uses "guided chunk distribution (approximates work-stealing)"
 - Sets expectations for each strategy's use case
 
+### Milestone 3: Distributed MPI Execution (Week 3)
+
+Hybrid MPI+OpenMP distributed classification across multiple ranks with two polygon distribution modes.
+
+Benchmark results will vary by system configuration. Run with:
+```bash
+OMP_NUM_THREADS=4 mpirun -np 2 --oversubscribe ./build/benchmark_m3
+OMP_NUM_THREADS=2 mpirun -np 4 --oversubscribe ./build/benchmark_m3
+```
+
+Key features:
+- **Polygon replication**: All ranks hold full polygon set — simpler, no boundary issues
+- **Spatial partitioning**: Each rank holds only polygons overlapping its region — lower memory
+- **Batch processing**: 100M points processed in 10M batches to limit peak memory
+- **Correctness validated** against sequential baseline for all modes and rank counts
+
+Metrics reported: total time, scatter/compute/gather breakdown, throughput (pts/sec), communication overhead %, load balance ratio.
+
 ## Key Insights
 
 1. **Work-Stealing dominates on clustered large datasets** (1M points: **2.39×** speedup) ⭐
@@ -152,43 +170,35 @@ Four parallelization strategies on 4 threads using OpenMP, with honest timing (F
 .
 |-- README.md
 |-- Week1_completion.md
-|-- build.sh
+|-- Week2_completion.md
+|-- Week3_completion.md
+|-- build.sh / build.ps1
 |-- CMakeLists.txt
 |-- pak_admin2.geojson
 |-- pak_admincentroids.geojson
 |-- include/
 |   |-- geometry/
-|   |   |-- point.hpp
-|   |   |-- polygon.hpp
-|   |   `-- ray_casting.hpp
+|   |   |-- point.hpp, polygon.hpp, ray_casting.hpp
 |   |-- generator/
-|   |   |-- distribution.hpp
-|   |   `-- polygon_loader.hpp
+|   |   |-- distribution.hpp, polygon_loader.hpp
 |   |-- index/
-|   |   |-- bbox_filter.hpp
-|   |   |-- geojson_loader.hpp
-|   |   |-- quadtree.hpp
-|   |   `-- strip_index.hpp
+|   |   |-- bbox_filter.hpp, geojson_loader.hpp, quadtree.hpp, strip_index.hpp
+|   |-- parallel/
+|   |   |-- parallel_classifier.hpp, work_stealing_classifier.hpp
+|   |-- distributed/
+|   |   |-- mpi_types.hpp, mpi_classifier.hpp, spatial_partitioner.hpp
 |   `-- nlohmann/
 |       `-- json.hpp
 |-- src/
-|   |-- benchmark_m1.cpp
-|   |-- geometry/
-|   |   |-- point.cpp
-|   |   |-- polygon.cpp
-|   |   `-- ray_casting.cpp
-|   |-- generator/
-|   |   |-- uniform_distribution.cpp
-|   |   |-- clustered_distribution.cpp
-|   |   `-- polygon_loader.cpp
-|   `-- index/
-|       |-- bbox_filter.cpp
-|       |-- geojson_loader.cpp
-|       |-- quadtree.cpp
-|       `-- strip_index.cpp
+|   |-- benchmark_m1.cpp, benchmark_m2.cpp, benchmark_m3.cpp
+|   |-- geometry/, generator/, index/
+|   |-- parallel/
+|   |   |-- parallel_classifier.cpp, work_stealing_classifier.cpp
+|   `-- distributed/
+|       |-- mpi_types.cpp, mpi_classifier.cpp, spatial_partitioner.cpp
 |-- tests/
-|   `-- test_ray_casting.cpp
-`-- docs/
+|   |-- test_ray_casting.cpp
+|   `-- test_mpi_classifier.cpp
 ```
 
 ## Architecture
@@ -210,6 +220,18 @@ Four parallelization strategies on 4 threads using OpenMP, with honest timing (F
 1. Synthetic generators (uniform and clustered)
 2. GeoJSON polygon and centroid loaders
 
+### 4. Parallel Layer (Milestone 2)
+
+1. Five OpenMP strategies: static, dynamic, tiled+morton, work-stealing, hybrid
+2. Unified dispatcher with correctness validation
+
+### 5. Distributed Layer (Milestone 3)
+
+1. MPI type registration and polygon serialization
+2. Spatial partitioner (strip and grid decomposition)
+3. Distributed classifier with replication and spatial partition modes
+4. Batch processing for 100M+ points
+
 ## Benchmarking Pipeline
 
 Stage flow in `src/benchmark_m1.cpp`:
@@ -225,14 +247,17 @@ Validation compares optimized stages to Stage 1 to ensure correctness.
 
 Prerequisites:
 
-1. C++17 compiler
+1. C++17 compiler with OpenMP (GCC recommended)
 2. Bash-compatible shell for `build.sh`
+3. Open MPI for Milestone 3 (`brew install open-mpi`)
 
 Quick start:
 
 ```bash
 bash build.sh
-bash -lc "./build/benchmark_m1"
+./build/benchmark_m1                                                    # M1: sequential
+./build/benchmark_m2                                                    # M2: parallel
+OMP_NUM_THREADS=4 mpirun -np 2 --oversubscribe ./build/benchmark_m3    # M3: distributed
 ```
 
 ## Design Decisions
@@ -259,6 +284,10 @@ Configuration:
 
 ## Documentation
 
-Detailed Week 1 implementation notes are available in:
+Detailed implementation notes:
 
-1. `Week1_completion.md`
+1. `Week1_completion.md` — Sequential baseline and spatial indexing
+2. `Week2_completion.md` — Parallel OpenMP strategies and thread scaling
+3. `Week3_completion.md` — Distributed MPI execution and batch processing
+4. `RUN_INSTRUCTIONS.md` — Build and run guide for all platforms
+5. `WORK_REPORT.md` — Project status and work completed

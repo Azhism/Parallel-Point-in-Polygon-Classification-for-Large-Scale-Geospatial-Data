@@ -72,6 +72,29 @@ target_link_libraries(benchmark_m1 PUBLIC pip_core pip_generators)
 add_executable(benchmark_m2 src/benchmark_m2.cpp)
 target_link_libraries(benchmark_m2 PUBLIC pip_core pip_generators pip_parallel)
 
+# --- Milestone 3: MPI distributed execution ---
+find_package(MPI QUIET)
+if(MPI_FOUND)
+    message(STATUS "MPI found: ${MPI_CXX_COMPILER}")
+
+    add_library(pip_distributed
+        src/distributed/mpi_types.cpp
+        src/distributed/mpi_classifier.cpp
+        src/distributed/spatial_partitioner.cpp
+    )
+    target_link_libraries(pip_distributed PUBLIC pip_core pip_parallel MPI::MPI_CXX)
+    target_include_directories(pip_distributed PUBLIC ${PROJECT_SOURCE_DIR}/include)
+
+    add_executable(benchmark_m3 src/benchmark_m3.cpp)
+    target_link_libraries(benchmark_m3 PUBLIC pip_distributed pip_generators pip_parallel MPI::MPI_CXX)
+
+    add_executable(test_mpi_classifier tests/test_mpi_classifier.cpp)
+    target_link_libraries(test_mpi_classifier PUBLIC pip_distributed pip_generators MPI::MPI_CXX)
+    add_test(NAME MPIClassifierTest COMMAND mpirun -np 2 test_mpi_classifier)
+else()
+    message(WARNING "MPI not found. Skipping distributed targets. Install: brew install open-mpi")
+endif()
+
 # Install targets
 install(TARGETS pip_core pip_generators pip_parallel LIBRARY DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)

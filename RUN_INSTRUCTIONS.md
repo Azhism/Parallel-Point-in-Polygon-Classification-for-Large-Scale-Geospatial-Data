@@ -2,10 +2,11 @@
 
 ## Overview
 
-This project provides two benchmark executables:
+This project provides three benchmark executables:
 
 1. Milestone 1: sequential baseline with spatial indexing
 2. Milestone 2: parallel classification strategies with OpenMP
+3. Milestone 3: distributed MPI execution with batch processing
 
 Use these instructions from the project root directory.
 
@@ -13,9 +14,12 @@ Use these instructions from the project root directory.
 
 ## Requirements
 
-1. C++17-capable compiler (g++)
+1. C++17-capable compiler with OpenMP support (GCC recommended; Apple Clang lacks -fopenmp)
 2. GNU binutils (ar)
-3. OpenMP support enabled in compiler toolchain
+
+For Milestone 3 (MPI):
+
+1. Open MPI (`brew install open-mpi` on macOS, `apt install libopenmpi-dev` on Linux)
 
 Optional:
 
@@ -48,6 +52,12 @@ Run Milestone 2 benchmark:
 
 ```powershell
 .\build\benchmark_m2.exe
+```
+
+Run Milestone 3 MPI benchmark (requires MPI installed):
+
+```powershell
+mpirun -np 4 .\build\benchmark_m3.exe
 ```
 
 Important:
@@ -86,6 +96,27 @@ Run Milestone 2 benchmark:
 ./build/benchmark_m2
 ```
 
+Run Milestone 3 MPI benchmark:
+
+```bash
+# MPI correctness test
+mpirun -np 2 --oversubscribe ./build/test_mpi_classifier
+
+# 2 ranks x 4 threads (recommended for 8-core machine)
+OMP_NUM_THREADS=4 mpirun -np 2 --oversubscribe ./build/benchmark_m3
+
+# 4 ranks x 2 threads
+OMP_NUM_THREADS=2 mpirun -np 4 --oversubscribe ./build/benchmark_m3
+
+# Include 100M point benchmark (takes longer)
+OMP_NUM_THREADS=2 mpirun -np 4 --oversubscribe ./build/benchmark_m3 --100m
+
+# Pure MPI mode (no OpenMP)
+OMP_NUM_THREADS=1 mpirun -np 8 --oversubscribe ./build/benchmark_m3
+```
+
+Note: `--oversubscribe` allows more ranks than physical cores (useful on a single machine).
+
 ---
 
 ## CMake Workflow (Optional)
@@ -104,7 +135,8 @@ Then run benchmark binaries from the produced build output folder.
 
 1. benchmark_m1 prints sequential/indexed synthetic benchmark stages and validation checks.
 2. benchmark_m2 prints sequential and parallel strategies with speedups and thread-scaling summaries.
-3. Validation lines should report matching results against baseline.
+3. benchmark_m3 prints distributed MPI benchmark matrix with timing breakdown (scatter/compute/gather), throughput, communication overhead %, and load balance ratio.
+4. Validation lines should report matching results against baseline.
 
 ---
 
