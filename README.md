@@ -120,19 +120,46 @@ Four parallelization strategies on 4 threads using OpenMP, with honest timing (F
 
 Hybrid MPI+OpenMP distributed classification across multiple ranks with two polygon distribution modes.
 
-Benchmark results will vary by system configuration. Run with:
-```bash
-OMP_NUM_THREADS=4 mpirun -np 2 --oversubscribe ./build/benchmark_m3
-OMP_NUM_THREADS=2 mpirun -np 4 --oversubscribe ./build/benchmark_m3
-```
+> **System:** 2 MPI ranks x 8 OpenMP threads/rank = 16 total cores  
+> **Polygon grid:** 100x100 = 10,000 polygons
 
-Key features:
-- **Polygon replication**: All ranks hold full polygon set — simpler, no boundary issues
-- **Spatial partitioning**: Each rank holds only polygons overlapping its region — lower memory
-- **Batch processing**: 100M points processed in 10M batches to limit peak memory
+#### 1M Points
+
+| Distribution | Polygon Mode | Total (ms) | Scatter (ms) | Compute (ms) | Gather (ms) | pts/sec | Comm% | Load Balance |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Uniform | Replicate | 107.7 | 7.4 | 81.5 | 11.4 | 9,284,879 | 17.5% | 1.00 |
+| Uniform | Partition | 70.8 | 7.3 | 51.6 | 4.8 | 14,130,035 | 17.0% | 1.05 |
+| Clustered | Replicate | 90.8 | 7.5 | 24.0 | 43.9 | 11,017,725 | 56.6% | 1.57 |
+| Clustered | Partition | 89.9 | 7.6 | 37.7 | 37.0 | 11,122,778 | 49.5% | 1.44 |
+
+#### 10M Points
+
+| Distribution | Polygon Mode | Total (ms) | Scatter (ms) | Compute (ms) | Gather (ms) | pts/sec | Comm% | Load Balance |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Uniform | Replicate | 837.6 | 74.2 | 586.5 | 177.4 | 11,938,916 | 30.0% | 1.05 |
+| Uniform | Partition | 691.5 | 72.7 | 533.5 | 12.1 | 14,461,232 | 12.3% | 1.01 |
+| Clustered | Replicate | 981.0 | 73.1 | 255.3 | 559.6 | 10,193,712 | 62.4% | 1.61 |
+| Clustered | Partition | 911.4 | 69.5 | 293.6 | 481.3 | 10,972,216 | 60.3% | 1.60 |
+
+**Validation:** [PASS] 1M uniform classification matches sequential baseline exactly.
+
+#### Key Observations
+
+- **Spatial partitioning beats replication** on uniform data (14.5M vs 11.9M pts/sec at 10M) due to smaller per-rank polygon sets and better cache utilization
+- **Communication overhead drops at scale**: uniform partition goes from 17% (1M) to 12.3% (10M) as compute dominates
+- **Clustered data causes load imbalance**: load balance ratio reaches 1.57-1.61 (one rank gets disproportionate work)
+- **Clustered communication overhead is high** (50-62%) due to uneven gather sizes from load imbalance
+
+#### Additional Features
+
+- **Batch processing**: 100M+ points processed in 10M batches to limit peak memory (~60MB/rank)
 - **Correctness validated** against sequential baseline for all modes and rank counts
-
-Metrics reported: total time, scatter/compute/gather breakdown, throughput (pts/sec), communication overhead %, load balance ratio.
+- Run with different rank/thread combinations for scaling analysis:
+  ```bash
+  OMP_NUM_THREADS=8 mpirun -np 1 ./build/benchmark_m3    # baseline
+  OMP_NUM_THREADS=4 mpirun -np 2 ./build/benchmark_m3    # hybrid
+  OMP_NUM_THREADS=1 mpirun -np 8 ./build/benchmark_m3    # pure MPI
+  ```
 
 ## Key Insights
 
