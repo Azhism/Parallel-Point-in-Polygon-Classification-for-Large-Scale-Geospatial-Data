@@ -1,5 +1,6 @@
 # Build artifacts
 build/
+/ipc/
 *.o
 *.a
 *.so

@@ -7,6 +7,7 @@ project(PointInPolygonPDC
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+find_package(OpenMP REQUIRED)
 
 # Platform-specific optimization flags
 if(MSVC)
@@ -47,7 +48,6 @@ add_library(pip_generators
     src/generator/uniform_distribution.cpp
     src/generator/clustered_distribution.cpp
     src/generator/polygon_loader.cpp
-    src/generator/geojson_loader.cpp
 )
 target_link_libraries(pip_generators PUBLIC pip_core)
 
@@ -57,6 +57,9 @@ add_library(pip_parallel
     src/parallel/work_stealing_classifier.cpp
 )
 target_link_libraries(pip_parallel PUBLIC pip_core)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(pip_parallel PUBLIC OpenMP::OpenMP_CXX)
+endif()
 
 # Unit tests
 enable_testing()
@@ -71,6 +74,14 @@ target_link_libraries(benchmark_m1 PUBLIC pip_core pip_generators)
 # Milestone 2 benchmark
 add_executable(benchmark_m2 src/benchmark_m2.cpp)
 target_link_libraries(benchmark_m2 PUBLIC pip_core pip_generators pip_parallel)
+
+# Milestone 3 benchmark
+add_executable(benchmark_m3 src/benchmark_m3.cpp)
+target_link_libraries(benchmark_m3 PUBLIC pip_core pip_generators pip_parallel OpenMP::OpenMP_CXX)
+
+# Milestone 3 worker executable for process-based IPC
+add_executable(worker src/worker_main.cpp)
+target_link_libraries(worker PUBLIC pip_core)
 
 # Install targets
 install(TARGETS pip_core pip_generators pip_parallel LIBRARY DESTINATION lib)

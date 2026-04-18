@@ -1,264 +1,207 @@
 # Parallel Point-in-Polygon Classification for Large-Scale Geospatial Data
 
-A comprehensive exploration of spatial indexing and parallel-oriented design for rapid geospatial classification at scale.
+This project classifies large GPS-like point sets against polygon regions using sequential spatial indexing, shared-memory parallelism, and a batch-based master/worker execution model.
 
-## Project Overview
+## Status
 
-This project addresses a critical geospatial systems problem: classifying very large point sets (GPS-like events) against polygon regions efficiently and correctly.
+Complete through Milestone 3.
 
-Real-world applications include:
+Canonical benchmark output files:
 
-1. City boundary and administrative zone classification
-2. Postal zone assignment
-3. Service area determination (delivery, emergency response)
-4. Geofence-based filtering
+1. `milestone_1.txt` - raw output from `build\benchmark_m1.exe`
+2. `milestone_2.txt` - raw output from `build\benchmark_m2.exe`
+3. `milestone_3.txt` - raw output from `build\benchmark_m3.exe --full`
 
-## The Challenge
+Use those three files as the ground truth for timings. Older report files may contain historical runs from earlier sessions.
 
-Classifying 1 million points against 10,000 polygons with naive ray-casting is expensive:
+## Milestone 1
 
-1. Massive geometric work
-2. Linear polygon scanning per point
-3. Heavy sensitivity to spatial skew and polygon complexity
+Sequential baseline with spatial indexing.
 
-Spatial indexing is required to keep candidate checks small and maintain high throughput.
+Implemented:
 
-## Project Status
+1. Ray-casting point-in-polygon classifier.
+2. Edge and vertex boundary handling.
+3. Holes and MultiPolygon support.
+4. Bounding-box filtering.
+5. Quadtree spatial index.
+6. Strip index.
+7. Uniform and clustered synthetic point generators.
+8. Real-world Pakistan GeoJSON dataset.
 
-✅ **Week 2 Complete** - April 12, 2026  
-All parallel optimizations finalized with radix sort activation and honest benchmarking.
+Polygon creation:
 
-Benchmark: 100 x 100 polygon grid (10,000 polygons)
+1. Synthetic polygons are created with `PolygonLoader::create_grid`.
+2. The default benchmark grid is 100 x 100 = 10,000 square polygons.
+3. Real polygons are loaded from `pak_admin2.geojson`.
 
-#### Uniform Distribution
+Canonical M1 highlights from `milestone_1.txt`:
 
-| Dataset | Brute Force + BBox | Quadtree | Strip Index | Quadtree Speedup | Strip Speedup |
-|---|---:|---:|---:|---:|---:|
-| 100K points | 1849.77 ms | 91.77 ms | 96.83 ms | 20.16x | 19.10x |
-| 1M points | 19147.03 ms | 617.48 ms | 703.29 ms | 31.01x | 27.23x |
+| Dataset | Brute Force + BBox | Quadtree | Strip Index | Best Indexed Speedup |
+|---|---:|---:|---:|---:|
+| 100K uniform | 2405.80 ms | 90.45 ms | 87.62 ms | 27.46x |
+| 1M uniform | 16500.25 ms | 787.09 ms | 876.24 ms | 20.96x |
+| 100K clustered | 1568.85 ms | 50.07 ms | 73.75 ms | 31.33x |
+| 1M clustered | 16553.33 ms | 520.58 ms | 711.06 ms | 31.80x |
 
-#### Clustered Distribution
+Real-world data:
 
-| Dataset | Brute Force + BBox | Quadtree | Strip Index | Quadtree Speedup | Strip Speedup |
-|---|---:|---:|---:|---:|---:|
-| 100K points | 2123.59 ms | 63.67 ms | 187.06 ms | 33.35x | 11.35x |
-| 1M points | 16063.64 ms | 289.97 ms | 514.42 ms | 55.40x | 31.23x |
+1. `pak_admin2.geojson`: 204 loaded polygons.
+2. `pak_admincentroids.geojson`: 745 loaded points.
+3. Results validate against the brute-force baseline.
 
-### Milestone 2: Parallel Optimization (Week 2 - Final with Fixes Applied)
+## Milestone 2
 
-Four parallelization strategies on 4 threads using OpenMP, with honest timing (Fixes 1-4 applied).
+Parallel point classification and load balancing.
 
-#### Uniform Distribution
+Implemented:
 
-| Dataset | Sequential | Static OMP | Dynamic OMP | Tiled+Morton* | Work-Stealing† | Best |
-|---------|-----------|-----------|-----------|-----------|-----------|---------|
-| 100K points | 99.19 ms | 121.76 ms | 114.36 ms | 154.00 ms | 112.90 ms | Static 0.81× |
-| 1M points | 786.26 ms | 516.01 ms | 483.27 ms | 844.67 ms | 709.09 ms | Dynamic **1.63×** |
+1. Sequential quadtree baseline.
+2. Static OpenMP.
+3. Dynamic OpenMP.
+4. Tiled + Morton/Z-order cache-locality strategy.
+5. True work-stealing with per-thread deques.
+6. Hybrid static + dynamic scheduling.
+7. Thread-scaling tables.
 
-#### Clustered Distribution  
-
-| Dataset | Sequential | Static OMP | Dynamic OMP | Tiled+Morton* | Work-Stealing† | Best |
-|---------|-----------|-----------|-----------|-----------|-----------|---------|
-| 100K points | 146.41 ms | 85.31 ms | 79.13 ms | 134.63 ms | 93.61 ms | Dynamic **1.85×** |
-| 1M points | 511.73 ms | 305.81 ms | 264.25 ms | 470.05 ms | 214.32 ms | Work-Stealing **2.39×** ⭐ |
-
-#### Thread Scaling (1M points, Dynamic OMP)
-
-**Uniform:**
-| Threads | Time | Speedup | Efficiency |
-|---------|------|---------|-----------|
-| 1 | 520.69 ms | 1.51× | 151.0% |
-| 2 | 476.09 ms | 1.65× | 82.6% |
-| 4 | 356.21 ms | **2.21×** | 55.2% |
-
-**Clustered:**
-| Threads | Time | Speedup | Efficiency |
-|---------|------|---------|-----------|
-| 1 | 423.40 ms | 1.21× | 120.9% |
-| 2 | 225.55 ms | 2.27× | 113.4% |
-| 4 | 182.11 ms | **2.81×** | 70.2% |
-
-### Real-World Data (Pakistan, 745 Points, 204 Polygons)
-
-| Strategy | Time | Throughput | Speedup |
-|----------|------|-----------|---------|
-| Sequential | 13.56 ms | 54,923 pts/sec | — |
-| Static OMP | 21.53 ms | 34,606 pts/sec | 0.63× |
-| Dynamic OMP | 14.78 ms | 50,412 pts/sec | 0.92× |
-| Tiled+Morton* | 14.67 ms | 50,768 pts/sec | 0.92× |
-| Work-Stealing† | 8.49 ms | 87,771 pts/sec | **1.60×** ⭐ |
-
-**Notes:**
-- *Tiled+Morton: End-to-end timing includes sort preprocessing (honest measurement)
-- †Work-Stealing: True per-thread deque task-stealing (Stage 5) — NEW
-- All 4 strategies validated correct against sequential baseline
-- Thread scaling analysis shows memory-bound quadtree operations at 4 threads
-
-### Week 2 Key Improvements (Fixes Applied)
-
-**Fix 1: Work-Stealing Classifier (Stage 5)**
-- Implements true per-thread deque stealing vs. OpenMP's guided scheduling
-- Shows **2.39× speedup** on 1M clustered points (best overall on this dataset)
-- Outperforms Tiled+Morton on non-uniform data
-
-**Fix 2: Honest Tiled+Morton Timing**
-- Changed from measuring only classification → now measures sort + classification
-- Reflects real amortization cost of Morton preprocessing
-- Explains why end-to-end speedup is lower than classify-only phase
-
-**Fix 3: Thread Scaling Memory Bottleneck Analysis**
-- Added diagnostic: "Quadtree lookup is memory-bound... Extra threads increase RAM contention"
-- Explains sub-linear scaling at 4 threads (55.2-70.2% efficiency)
-- Identifies memory bandwidth as bottleneck, not compute
-
-**Fix 4: Strategy Notes at Top**
-- Moved explanatory notes to start of output (visible before results)
-- Clarifies that Dynamic OMP uses "guided chunk distribution (approximates work-stealing)"
-- Sets expectations for each strategy's use case
-
-## Key Insights
-
-1. **Work-Stealing dominates on clustered large datasets** (1M points: **2.39×** speedup) ⭐
-   - True per-thread deque stealing beats OpenMP's guided scheduling
-   - Handles non-uniform workload balance better than static/dynamic
-
-2. **Dynamic OMP best for uniform 1M dataset** (1.63× speedup)
-   - Guided distribution provides balanced work across threads
-   - Less overhead than tiled+morton preprocessing
-
-3. **Tiled+Morton effective only with honest timing** (end-to-end including sort)
-   - Honest measurement includes sort preprocessing cost
-   - Classify-only phase is ~2.5× faster, but sort adds significant latency
-   - Only beneficial for specific uniform/small-dataset scenarios
-
-4. **Thread scaling sub-linear at 4 threads** (55-70% efficiency)
-   - Root cause: **Quadtree lookup is memory-bound**
-   - Random memory access pattern increases RAM contention
-   - Extra threads don't scale linearly beyond single thread
-
-5. **Real-world parallelization highly effective with Work-Stealing** (745 points: 1.60× speedup)
-   - Small dataset shows 1.60× vs 0.63× (static) or 0.92× (dynamic)
-   - Work-stealing minimizes overhead on tiny workloads
-
-6. **All implementations verified correct** across 25+ validation tests—zero mismatches
-
-7. **Sequential baseline still competitive on some workloads**
-   - Shows that parallelization overhead can exceed gains on poorly-scaled problem sizes
-   - But at scale (100K+ points) parallelization always wins
-
-## Project Structure
+Current machine note:
 
 ```text
-.
-|-- README.md
-|-- Week1_completion.md
-|-- build.sh
-|-- CMakeLists.txt
-|-- pak_admin2.geojson
-|-- pak_admincentroids.geojson
-|-- include/
-|   |-- geometry/
-|   |   |-- point.hpp
-|   |   |-- polygon.hpp
-|   |   `-- ray_casting.hpp
-|   |-- generator/
-|   |   |-- distribution.hpp
-|   |   `-- polygon_loader.hpp
-|   |-- index/
-|   |   |-- bbox_filter.hpp
-|   |   |-- geojson_loader.hpp
-|   |   |-- quadtree.hpp
-|   |   `-- strip_index.hpp
-|   `-- nlohmann/
-|       `-- json.hpp
-|-- src/
-|   |-- benchmark_m1.cpp
-|   |-- geometry/
-|   |   |-- point.cpp
-|   |   |-- polygon.cpp
-|   |   `-- ray_casting.cpp
-|   |-- generator/
-|   |   |-- uniform_distribution.cpp
-|   |   |-- clustered_distribution.cpp
-|   |   `-- polygon_loader.cpp
-|   `-- index/
-|       |-- bbox_filter.cpp
-|       |-- geojson_loader.cpp
-|       |-- quadtree.cpp
-|       `-- strip_index.cpp
-|-- tests/
-|   `-- test_ray_casting.cpp
-`-- docs/
+Available threads: 4
 ```
 
-## Architecture
+There is no valid 8-thread result in the current canonical benchmark output.
 
-### 1. Geometry Layer
+Canonical M2 highlights from `milestone_2.txt`:
 
-1. Point, Polygon, BBox primitives
-2. Ray-casting classifier with boundary handling
-3. Support for holes and MultiPolygon-expanded components
+| Dataset | Sequential | Best Strategy | Best Time | Speedup |
+|---|---:|---|---:|---:|
+| 100K uniform | 91.75 ms | Hybrid | 36.79 ms | 2.49x |
+| 100K clustered | 53.73 ms | Hybrid | 41.01 ms | 1.31x |
+| 1M uniform | 845.84 ms | Hybrid | 390.97 ms | 2.16x |
+| 1M clustered | 546.53 ms | Hybrid | 302.38 ms | 1.81x |
 
-### 2. Indexing Layer
+Thread-scaling interpretation:
 
-1. BBox linear filter baseline
-2. Quadtree spatial index
-3. Strip Index (horizontal strip partitioning)
+1. Scaling is sub-linear at 4 threads.
+2. The clustered 1M run barely improves from 2 to 4 threads.
+3. Root cause reported by the benchmark: quadtree lookup is memory-bound and random-access heavy.
 
-### 3. Data Layer
+SIMD note:
 
-1. Synthetic generators (uniform and clustered)
-2. GeoJSON polygon and centroid loaders
+SIMD vectorization was optional in the assignment and was not implemented.
 
-## Benchmarking Pipeline
+## Milestone 3
 
-Stage flow in `src/benchmark_m1.cpp`:
+Scalable batch processing, in-memory master/worker execution, and Windows file-based multi-process IPC.
 
-1. Stage 1: Brute force + bbox filter
-2. Stage 2: Quadtree candidate query + ray-casting
-3. Stage 3: Strip Index candidate query + ray-casting
-4. Stage 4: Real-world polygons and centroid points
+Implemented:
 
-Validation compares optimized stages to Stage 1 to ensure correctness.
+1. Batch processing of large point sets.
+2. Spatial point partitioning across workers.
+3. Worker-local quadtree indices.
+4. Polygon replication mode.
+5. Spatial polygon sharding mode.
+6. Compact result aggregation using counts/checksums.
+7. Strong scaling.
+8. Weak scaling.
+9. 1M, 10M, and 100M point benchmarks.
+10. Uniform and clustered distributions.
+11. Separate `worker.exe` process path using binary input/result files and `CreateProcess`.
 
-## Build and Run
+MPI / multi-process note:
 
-Prerequisites:
+The assignment says "MPI or multi-process." MPI is not used because the current native Windows/MSYS2 environment does not have MPI configured. Instead, Milestone 3 now includes an actual single-machine multi-process implementation:
 
-1. C++17 compiler
-2. Bash-compatible shell for `build.sh`
+1. `benchmark_m3.exe` acts as the master process.
+2. The master writes binary IPC files under `ipc/`.
+3. The master launches `build/worker.exe` child processes with `CreateProcess`.
+4. Each worker reads its point partition and polygon file, builds its own quadtree, classifies points, and writes a result file.
+5. The master waits for all workers and aggregates count/checksum results.
 
-Quick start:
+The in-memory worker model is still retained for the large 100M benchmark path and for strong/weak scaling tables. The process path makes communication cost explicit through write, worker, read, and total timing.
+
+The design explores the distributed setting:
+
+1. Points are partitioned spatially across workers.
+2. Polygons are either replicated or sharded.
+3. Each worker owns an independent polygon/index context.
+4. Results are aggregated centrally.
+5. The same layout can still map directly to MPI ranks in a future extension.
+
+Canonical M3 large-scale results from `milestone_3.txt`:
+
+| Dataset | Distribution | Workers | Class Time | Class Throughput | Total Time |
+|---:|---|---:|---:|---:|---:|
+| 1M | uniform | 4 | 518.11 ms | 1,930,081 pts/sec | 587.91 ms |
+| 1M | clustered | 4 | 358.84 ms | 2,786,737 pts/sec | 481.86 ms |
+| 10M | uniform | 4 | 5298.39 ms | 1,887,365 pts/sec | 5713.48 ms |
+| 10M | clustered | 4 | 3255.79 ms | 3,071,455 pts/sec | 4151.00 ms |
+| 100M | uniform | 4 | 46222.22 ms | 2,163,462 pts/sec | 49846.42 ms |
+| 100M | clustered | 4 | 34277.60 ms | 2,917,357 pts/sec | 43051.56 ms |
+
+Replication vs sharding from `milestone_3.txt`:
+
+| Distribution | Mode | Indexed Polygon Copies | Checksum |
+|---|---|---:|---|
+| uniform | replicated | 40,000 | `e38e4d8a13e3441d` |
+| uniform | sharded | 10,600 | `e38e4d8a13e3441d` |
+| clustered | replicated | 40,000 | `c98c4f58897e6cf9` |
+| clustered | sharded | 10,600 | `c98c4f58897e6cf9` |
+
+Matching checksums show that sharding preserved classification results.
+
+Multi-process IPC results from `milestone_3.txt`:
+
+| Distribution | Mode | Write Time | Worker Time | Read Time | Total Time | Checksum |
+|---|---|---:|---:|---:|---:|---|
+| uniform | replicated | 494.25 ms | 1137.89 ms | 0.72 ms | 1633.86 ms | `e38e4d8a13e3441d` |
+| uniform | sharded | 746.46 ms | 1076.23 ms | 1.80 ms | 1824.56 ms | `e38e4d8a13e3441d` |
+| clustered | replicated | 492.64 ms | 1097.83 ms | 0.63 ms | 1591.21 ms | `c98c4f58897e6cf9` |
+| clustered | sharded | 542.19 ms | 1067.45 ms | 0.60 ms | 1610.47 ms | `c98c4f58897e6cf9` |
+
+The process checksums match the in-memory benchmark checksums for the same 1M datasets, so the IPC worker path preserves correctness while exposing communication overhead.
+
+Weak-scaling note:
+
+Weak scaling is not perfectly flat. The latest canonical run improves at 4 workers versus 2 workers, but the 2-worker point is slower than ideal. This should still be discussed as real overhead from scheduling, replicated indexing, memory bandwidth pressure during quadtree traversal, and batch partition/aggregation.
+
+## Build And Run
+
+On Windows, use the MSYS2 runtime first in `PATH`:
+
+```powershell
+$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+.\build.ps1
+.\build\benchmark_m1.exe
+.\build\benchmark_m2.exe
+.\build\benchmark_m3.exe --full
+```
+
+On Linux/macOS-style shells:
 
 ```bash
 bash build.sh
-bash -lc "./build/benchmark_m1"
+./build/benchmark_m1
+./build/benchmark_m2
+./build/benchmark_m3 --full
 ```
 
-## Design Decisions
+## Key Files
 
-1. Ray-casting selected for robust point-in-polygon correctness.
-2. Quadtree and Strip Index included to compare two different pruning strategies.
-3. Real-world GeoJSON stage included for data realism and integration validation.
-4. Milestone 1 remains sequential by design to establish baseline before parallel work.
+```text
+include/geometry/      Geometry primitives and ray-casting API
+include/index/         BBox, quadtree, strip index, GeoJSON loader
+include/generator/     Synthetic point and polygon generation
+include/parallel/      Parallel classifier APIs
+include/ipc/           Binary IPC serialization helpers
+src/benchmark_m1.cpp   Milestone 1 benchmark
+src/benchmark_m2.cpp   Milestone 2 benchmark
+src/benchmark_m3.cpp   Milestone 3 benchmark
+src/worker_main.cpp    Multi-process IPC worker executable
+tests/                 Ray-casting unit tests
+```
 
-## Experimental Methodology
+## Final Notes
 
-Configuration:
-
-1. Polygon grid: 100 x 100 (10,000 polygons)
-2. Point datasets: 100K and 1M
-3. Distributions: uniform and clustered
-4. Metrics: throughput, latency, speedup, build cost, correctness
-
-## Troubleshooting
-
-1. If build fails, verify compiler/toolchain availability and C++17 support.
-2. If results look unexpectedly slow, confirm optimization flags are active in `build.sh`.
-3. If real-data stage does not run, verify `pak_admin2.geojson` and `pak_admincentroids.geojson` are present in project root.
-
-## Documentation
-
-Detailed Week 1 implementation notes are available in:
-
-1. `Week1_completion.md`
+The project satisfies the assignment requirements. Milestone 3 does not use MPI, but it now includes a true separate-process worker path on Windows in addition to the in-memory master/worker benchmark.

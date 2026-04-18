@@ -1,5 +1,7 @@
 # Week 2 Completion Report: Parallel Point-in-Polygon Classification
 
+Note: This file is a historical completion report. For the canonical benchmark output used for submission, see `milestone_2.txt`. The current canonical run reports 4 available threads, so older/non-canonical 8-thread claims should not be used.
+
 ## Status
 
 Week 2 parallelization is complete.

@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+Set-Location -LiteralPath $PSScriptRoot
 $OUTDIR = "build"
 $STACK_FLAGS = "-Wl,--stack,67108864"
 mkdir -Force $OUTDIR | Out-Null
@@ -28,5 +29,7 @@ g++ -O3 -std=c++17 -I./include -Wall -Wextra -fopenmp tests/test_ray_casting.cpp
 Write-Host "[*] Compiling benchmarks..."
 g++ -O3 -std=c++17 -I./include -Wall -Wextra -fopenmp src/benchmark_m1.cpp $OUTDIR/libpip_core.a -fopenmp $STACK_FLAGS -o $OUTDIR/benchmark_m1
 g++ -O3 -std=c++17 -I./include -Wall -Wextra -fopenmp src/benchmark_m2.cpp $OUTDIR/libpip_core.a -fopenmp $STACK_FLAGS -o $OUTDIR/benchmark_m2
+g++ -O3 -std=c++17 -I./include -Wall -Wextra -fopenmp src/benchmark_m3.cpp $OUTDIR/libpip_core.a -fopenmp $STACK_FLAGS -o $OUTDIR/benchmark_m3
+g++ -O3 -std=c++17 -I./include -Wall -Wextra src/worker_main.cpp $OUTDIR/libpip_core.a -o $OUTDIR/worker.exe
 
 Write-Host "[*] Build completed successfully!"

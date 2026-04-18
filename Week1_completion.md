@@ -1,5 +1,7 @@
 # Week 1 Completion Report
 
+Note: This file is a historical completion report. For the canonical benchmark output used for submission, see `milestone_1.txt`.
+
 ## Status
 
 Week 1 baseline is complete.

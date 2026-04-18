@@ -2,6 +2,7 @@
 # Build script for Point-in-Polygon Classification with Parallel Support
 
 set -e
+cd "$(dirname "$0")"
 
 CXXFLAGS="-O3 -std=c++17 -I./include -Wall -Wextra -fopenmp"
 LDFLAGS="-fopenmp"
@@ -36,8 +37,12 @@ g++ $CXXFLAGS tests/test_ray_casting.cpp $OUTDIR/libpip_core.a $LDFLAGS -o $OUTD
 echo "[*] Compiling benchmarks..."
 g++ $CXXFLAGS src/benchmark_m1.cpp $OUTDIR/libpip_core.a $LDFLAGS $STACK_FLAGS -o $OUTDIR/benchmark_m1
 g++ $CXXFLAGS src/benchmark_m2.cpp $OUTDIR/libpip_core.a $LDFLAGS $STACK_FLAGS -o $OUTDIR/benchmark_m2
+g++ $CXXFLAGS src/benchmark_m3.cpp $OUTDIR/libpip_core.a $LDFLAGS $STACK_FLAGS -o $OUTDIR/benchmark_m3
+g++ -O3 -std=c++17 -I./include -Wall -Wextra src/worker_main.cpp $OUTDIR/libpip_core.a -o $OUTDIR/worker
 
 echo "[*] Build completed successfully!"
 echo "Run: $OUTDIR/test_ray_casting"
 echo "Run: $OUTDIR/benchmark_m1"
 echo "Run: $OUTDIR/benchmark_m2"
+echo "Run: $OUTDIR/benchmark_m3"
+echo "Worker executable: $OUTDIR/worker"

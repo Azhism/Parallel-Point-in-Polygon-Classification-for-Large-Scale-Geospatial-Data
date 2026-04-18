@@ -74,7 +74,9 @@ uint64_t classify_point_from_candidates(const Point& point,
                                         const std::vector<uint64_t>& candidates) {
     for (uint64_t poly_id : candidates) {
         const Polygon& poly = polygons[poly_id];
-        if (RayCaster::point_in_polygon(point, poly) == RayCaster::Classification::INSIDE) {
+        auto classification = RayCaster::point_in_polygon(point, poly);
+        if (classification == RayCaster::Classification::INSIDE ||
+            classification == RayCaster::Classification::ON_BOUNDARY) {
             return poly.id;
         }
     }

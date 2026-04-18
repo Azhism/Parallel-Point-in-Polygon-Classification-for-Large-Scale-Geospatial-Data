@@ -1,167 +1,171 @@
 # Work Report: Point-in-Polygon Classification Project
 
 **Project:** Parallel Point-in-Polygon Classification for Large-Scale Geospatial Data  
-**Status:** Week 2 Complete — Thread-Scaling Methodology Corrected (April 12, 2026)  
-**Date:** April 12, 2026  
-**Milestone:** Milestone 2 (Parallel Optimization)
+**Status:** Complete through Milestone 3  
+**Date:** April 18, 2026  
 
----
+## Canonical Benchmark Outputs
 
-## Completed Work
+The raw benchmark outputs are stored in:
 
-### Week 1 — Sequential Baseline with Spatial Indexing
+1. `milestone_1.txt`
+2. `milestone_2.txt`
+3. `milestone_3.txt`
 
-| Component | Status | Details |
-|-----------|--------|---------|
-| **Point & Polygon structures** | ✓ Complete | `Point`, `BBox`, `Polygon`, `MultiPolygon` |
-| **Ray-casting algorithm** | ✓ Complete | Robust with edge/vertex/hole handling |
-| **BBox Filter** | ✓ Complete | Linear scan baseline pruning |
-| **Quadtree Index** | ✓ Complete | Recursive spatial hierarchy, `MAX_DEPTH=12`, `MAX_PER_LEAF=6` |
-| **Strip Index** | ✓ Complete | Horizontal strip partitioning |
-| **Uniform distribution generator** | ✓ Complete | `std::mt19937_64` uniform RNG |
-| **Clustered distribution generator** | ✓ Complete | Gaussian clusters over random centers |
-| **GeoJSON loader** | ✓ Complete | Polygon, MultiPolygon, flexible centroid schemas |
-| **Unit tests** | ✓ Complete | Ray-casting edge cases pass |
+These files are the source of truth for timings. Earlier report files may contain historical numbers from previous runs.
 
-**Files:** `include/geometry/`, `include/index/`, `include/generator/`, `src/geometry/`, `src/index/`, `src/generator/`, `tests/test_ray_casting.cpp`
+## Milestone 1
 
----
+Sequential baseline with spatial indexing is complete.
 
-### Week 2 — Parallel Classification
+Implemented:
 
-| Component | Status | Details |
-|-----------|--------|---------|
-| **Unified dispatcher** | ✓ Complete | Routes to 5 parallel strategies |
-| **Static OMP** | ✓ Complete | `schedule(static, sqrt(n)/4)` — cache-aware chunk sizing |
-| **Dynamic OMP** | ✓ Complete | `schedule(dynamic, sqrt(n)/4)` — adaptive load balancing |
-| **Tiled+Morton** | ✓ Complete | High-radix radix sort + tiled classify (honest e2e timing) |
-| **Work-Stealing** | ✓ Complete | Per-thread deques, back-steal from victim thread |
-| **Hybrid (Static+Dyn)** | ✓ Complete | Static chunks + atomic dynamic overflow pool |
-| **Thread-scaling table** | ✓ Fixed | Median-of-7, 1-thread baseline, Double Cache Warmup |
+1. Ray-casting point-in-polygon classifier.
+2. Points on edges/vertices handled through `ON_BOUNDARY`.
+3. Polygons with holes.
+4. MultiPolygon support through GeoJSON expansion.
+5. Bounding-box filtering.
+6. Quadtree index.
+7. Strip index.
+8. Uniform and clustered synthetic point generation.
+9. Real-world Pakistan GeoJSON dataset.
 
-**Files:** `include/parallel/parallel_classifier.hpp`, `src/parallel/parallel_classifier.cpp`, `include/parallel/work_stealing_classifier.hpp`, `src/parallel/work_stealing_classifier.cpp`, `src/benchmark_m2.cpp`
+How polygons are created:
 
----
+1. Synthetic polygons are created by `PolygonLoader::create_grid`.
+2. The standard benchmark uses a 100 x 100 grid of 10,000 square polygons.
+3. Real polygons are loaded from `pak_admin2.geojson`.
 
-## What We Have Done
+Real-world dataset:
 
-### Architecture and Core Implementation
+1. `pak_admin2.geojson` provides administrative polygons.
+2. `pak_admincentroids.geojson` provides centroid points.
+3. Latest full M1 benchmark loaded 204 polygons and 745 points.
 
-1. Built a complete sequential point-in-polygon pipeline with robust geometry primitives and ray-casting.
-2. Added two spatial indexing paths (quadtree and strip index) to reduce candidate polygon checks.
-3. Implemented synthetic data generators for repeatable testing under uniform and clustered workloads.
-4. Integrated GeoJSON parsing to support polygon and multipolygon input formats.
+## Milestone 2
 
-### Parallelization Work (Week 2)
+Parallel point classification and load balancing are complete.
 
-1. Added a unified classification dispatcher to switch strategies cleanly.
-2. Implemented five execution modes:
-	- Static OpenMP scheduling
-	- Dynamic OpenMP scheduling
-	- Tiled + Morton-order preprocessing with parallel classification
-	- Work-stealing with per-thread deques
-	- Hybrid static+dynamic scheduling
-3. Kept correctness checks tied to sequential output for every strategy.
-4. Updated build workflow for Windows and Linux/macOS with OpenMP support.
+Implemented strategies:
 
-### Quality and Verification
+1. Sequential baseline.
+2. Static OpenMP.
+3. Dynamic OpenMP.
+4. Tiled + Morton/Z-order.
+5. Work stealing.
+6. Hybrid static + dynamic scheduling.
 
-1. Verified all synthetic runs against sequential reference output.
-2. Added/finalized thread-scaling measurement methodology to reduce noisy conclusions.
-3. Confirmed project compiles and runs for both milestone executables.
+The optional SIMD extension was not implemented; it was optional.
 
----
+Current benchmark machine:
 
-## Problems Encountered and How We Addressed Them
+```text
+Available threads: 4
+```
 
-### 1. Measurement Methodology Produced Misleading Scaling
+Important correction:
 
-- Problem: Early scaling comparisons mixed cold-cache and warm-cache runs, which could make efficiency appear unrealistically high.
-- Action taken: Rebased scaling to 1-thread dynamic timing for the scaling loop and added extra warmup.
-- Outcome: Scaling interpretation is now more defensible and internally consistent.
+There is no current valid 8-thread result. Any older 8-thread table should be ignored unless clearly labeled as coming from a different machine. The canonical output in `milestone_2.txt` is 4-thread only.
 
-### 2. Run-to-Run Timing Variability
+Observed bottleneck:
 
-- Problem: A small number of runs allowed OS scheduling spikes to skew conclusions.
-- Action taken: Switched thread-scaling aggregation to median-of-7 runs.
-- Outcome: Reduced outlier influence and improved reproducibility of trend analysis.
+Scaling is sub-linear because quadtree traversal is memory-access heavy. Additional threads increase random memory access and memory bandwidth contention.
 
-### 3. Parallel Gains Limited at Higher Thread Counts
+## Milestone 3
 
-- Problem: Quadtree traversal is memory-access heavy; additional threads increase contention and reduce scaling efficiency.
-- Action taken: Tested multiple scheduling policies (static/dynamic/hybrid/work-stealing) and cache-oriented tiled approach.
-- Outcome: Parallel speedup is real but sub-linear on current hardware; bottleneck is identified rather than hidden.
+Scalable batch processing, in-memory master/worker execution, and Windows file-based multi-process execution are complete.
 
-### 4. Platform Friction on Windows
+Implemented:
 
-- Problem: Shell-script flow is inconvenient in a native Windows environment.
-- Action taken: Maintained PowerShell-native build path.
-- Outcome: Reliable local build/run workflow without WSL dependency.
+1. Batch streaming for large point sets.
+2. Spatial point partitioning.
+3. Worker-local quadtree indices.
+4. Polygon replication.
+5. Spatial polygon sharding.
+6. Efficient checksum/count aggregation.
+7. Strong scaling.
+8. Weak scaling.
+9. 1M, 10M, and 100M point benchmarks.
+10. Real `worker.exe` child processes using binary IPC files.
 
----
+## MPI / Multi-Process Note
 
-## What Is Remaining
+The assignment says "MPI or multi-process." This project does not use MPI, but it now implements the allowed multi-process route on native Windows.
 
-### High Priority
+Reason:
 
-1. Refine workload partitioning to improve memory locality for quadtree-heavy paths.
-2. Add more focused profiling (cache misses, memory bandwidth, hotspot attribution) to guide the next optimization step.
-3. Expand automated test coverage for edge cases in polygon boundaries and multipolygon hole handling.
+The current native Windows/MSYS2 environment does not have MPI configured. Implementing true MPI would require extra platform setup that is outside the current working toolchain, so the project uses `CreateProcess` plus file-based IPC instead.
 
-### Medium Priority
+What the implementation covers:
 
-1. Improve documentation of strategy-selection guidance (when to prefer static, dynamic, hybrid, or work-stealing).
-2. Add reproducibility notes for benchmark environment settings (thread affinity, power profile, background load).
-3. Consolidate report files so milestone narrative and benchmark artifacts stay synchronized.
+1. Points are spatially partitioned across workers.
+2. Polygons are evaluated in replicated and sharded modes.
+3. Each worker owns an independent polygon/index context.
+4. The master aggregates worker results using compact counts and checksums.
+5. Communication/computation/data-sharing trade-offs are measured through generation/partition time, classify time, total time, indexed polygon copies, and checksums.
+6. `benchmark_m3.exe` writes worker input files, launches `worker.exe`, waits for completion, reads result files, and aggregates outputs.
 
-### Optional / Stretch
+Mapping to MPI:
 
-1. Evaluate alternative spatial indexing strategies or quadtree layout changes to reduce random memory access.
-2. Investigate SIMD-friendly geometric kernels for candidate polygon checks.
-3. Add larger synthetic scenarios to stress-test scalability beyond current baseline sizes.
+1. Each current worker process maps to one MPI rank.
+2. Point buckets become MPI messages instead of input files.
+3. Worker aggregate structs become reduce/gather results.
+4. Replicated polygon mode maps to broadcasting polygons.
+5. Sharded polygon mode maps to assigning each process only intersecting polygons.
 
----
+Therefore, the distributed setting is explored with real child processes on one machine. It should be described honestly as multi-process IPC, not MPI.
 
-## Current Status Snapshot
+## Weak Scaling Note
 
-1. Milestone 1: Complete.
-2. Milestone 2: Functionally complete and validated on synthetic datasets.
-3. Main risk: Memory-bound behavior limits near-linear thread scaling.
-4. Next focus: Profiling-guided optimization and stronger reproducibility/testing discipline.
+Milestone 3 weak scaling is not perfectly flat. In the latest `milestone_3.txt`, the 4-worker point recovers versus 2 workers, but the 2-worker point is slower than ideal.
 
-## Build & Run
+This is a real bottleneck and should not be hidden.
+
+Likely causes:
+
+1. Thread scheduling overhead on a 4-thread machine.
+2. Memory bandwidth pressure during quadtree traversal.
+3. Replicated indexing overhead.
+4. Batch partitioning and aggregation overhead.
+5. Worker contention when all logical workers are active.
+
+## Instructor Milestone 0 Feedback Coverage
+
+1. "How are polygons created?"
+   - Synthetic grid polygons are generated by `PolygonLoader::create_grid`.
+   - Real polygons are loaded from GeoJSON.
+
+2. "Try to find a real world dataset"
+   - Pakistan administrative GeoJSON polygons and centroids are included.
+
+3. "Explore different strategies/algorithm"
+   - M1: brute-force + bbox, quadtree, strip index.
+   - M2: static OpenMP, dynamic OpenMP, tiled Morton, work stealing, hybrid.
+   - M3: replicated polygons, sharded polygons, batch master/worker execution, file-based multi-process IPC.
+
+4. "Ensure all aspects including communication, computation, data sharing, etc are optimized"
+   - Computation: spatial indexing and parallel point classification.
+   - Data sharing: read-only shared structures in M2; worker-local contexts in M3.
+   - Communication/aggregation: compact checksum/count aggregation in M3.
+
+5. "Explore distributed setting"
+   - Explored through single-machine master/worker execution and real child worker processes.
+   - MPI is not used; the multi-process implementation is documented.
+
+## Build And Run
 
 ```powershell
-# Windows PowerShell
+$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
 .\build.ps1
 .\build\benchmark_m1.exe
 .\build\benchmark_m2.exe
+.\build\benchmark_m3.exe --full
 ```
 
-```bash
-# Linux / macOS
-bash build.sh
-./build/benchmark_m1
-./build/benchmark_m2
-```
+## Final Verdict
 
----
+The project meets the milestone requirements. The main caveats are:
 
-## Known Issues & Mitigations
-
-| Issue | Impact | Status |
-|-------|--------|--------|
-| `build.sh` requires WSL on Windows | Medium | Mitigated by `build.ps1` (PowerShell equivalent) |
-| Tiled+Morton sort cost dominates at 1M+ points | Low | Documented; honest e2e timing reported |
-| Memory-bound quadtree traversal limits scaling at higher threads | Medium | Identified; profiling and locality improvements planned |
-
----
-
-## Conclusion
-
-**Week 2 is complete and verified (April 12, 2026).**
-
-1. Five parallel strategies are implemented and integrated into one benchmark pipeline.
-2. Core correctness is validated across synthetic workloads.
-3. Major technical risk is understood: memory behavior, not compute, is the primary limiter at higher parallelism.
-4. The project is ready for a next phase focused on profiling-driven optimization and test/report hardening.
+1. Current benchmark output is 4-thread only, not 8-thread.
+2. Milestone 3 is multi-process on one machine, not MPI.
+3. Weak scaling is not perfectly flat and should be discussed honestly.

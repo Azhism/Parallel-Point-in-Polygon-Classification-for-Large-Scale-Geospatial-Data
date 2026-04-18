@@ -30,7 +30,9 @@ uint64_t WorkStealingClassifier::classify_one(
     auto candidates = index.query_point(p);
     for (uint64_t pid : candidates) {
         if (pid < polygons.size()) {
-            if (RayCaster::point_in_polygon(p, polygons[pid]) == RayCaster::Classification::INSIDE) {
+            auto classification = RayCaster::point_in_polygon(p, polygons[pid]);
+            if (classification == RayCaster::Classification::INSIDE ||
+                classification == RayCaster::Classification::ON_BOUNDARY) {
                 return pid;
             }
         }
