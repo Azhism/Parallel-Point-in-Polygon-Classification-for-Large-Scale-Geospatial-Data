@@ -1,0 +1,67 @@
+﻿============================================================
+=== Milestone 3: Scalable Batch + Distributed Execution ===
+============================================================
+OpenMP max threads: 4
+Worker model: spatial master/worker partitions with independent indices
+Aggregation: counts + checksum only, no per-point result materialization
+100M mode: use --full when you want the longest required-scale run
+
+Creating polygon grid (100x100)...
+  Polygons: 10000
+
+=== Large-Scale Batched Throughput ===
+Batch size: 250000, workers: 4, default mode: replicated polygons
+Points    Dist       Workers Polygon mode                   Class ms   Class pts/s    Total ms  Avg cand  Checksum
+--------------------------------------------------------------------------------------------------------------------
+1000000   uniform    4       replicated polygons              404.22    2473897.90      466.84      3.51  e38e4d8a13e3441d
+1000000   clustered  4       replicated polygons              296.59    3371714.69      400.97      3.48  c98c4f58897e6cf9
+10000000  uniform    4       replicated polygons             3743.42    2671352.15     4064.82      3.50  acfdf3e4ef4cfac4
+10000000  clustered  4       replicated polygons             2729.17    3664123.44     3525.61      3.48  e2df0d5ef49a5d81
+
+=== Polygon Replication vs Spatial Sharding ===
+Trade-off: replication avoids boundary routing complexity but indexes more polygon copies; sharding reduces index size but requires spatial routing.
+Points    Dist       Workers Polygon mode                   Class ms   Class pts/s    Total ms  Avg cand  Checksum
+--------------------------------------------------------------------------------------------------------------------
+1000000   uniform    4       replicated polygons              349.75    2859209.66      407.80      3.51  e38e4d8a13e3441d
+  Indexed polygon copies: 40000
+1000000   uniform    4       spatially sharded polygons       337.85    2959924.11      377.78      3.51  e38e4d8a13e3441d
+  Indexed polygon copies: 10600
+1000000   clustered  4       replicated polygons              274.00    3649639.03      387.48      3.48  c98c4f58897e6cf9
+  Indexed polygon copies: 40000
+1000000   clustered  4       spatially sharded polygons       302.90    3301429.42      393.68      3.46  c98c4f58897e6cf9
+  Indexed polygon copies: 10600
+
+=== Strong Scaling (fixed 1000000 points, replicated polygons) ===
+Points    Dist       Workers Polygon mode                   Class ms   Class pts/s    Total ms  Avg cand  Checksum
+--------------------------------------------------------------------------------------------------------------------
+1000000   uniform    1       replicated polygons              788.19    1268731.07      822.32      3.51  e38e4d8a13e3441d
+1000000   clustered  1       replicated polygons              459.98    2173989.61      532.42      3.48  c98c4f58897e6cf9
+1000000   uniform    2       replicated polygons              541.43    1846953.66      587.37      3.51  e38e4d8a13e3441d
+1000000   clustered  2       replicated polygons              625.96    1597536.73      733.85      3.48  c98c4f58897e6cf9
+1000000   uniform    4       replicated polygons              400.95    2494080.92      469.25      3.51  e38e4d8a13e3441d
+1000000   clustered  4       replicated polygons              363.22    2753147.05      476.14      3.48  c98c4f58897e6cf9
+
+=== Weak Scaling (250000 points per worker, replicated polygons) ===
+Points    Dist       Workers Polygon mode                   Class ms   Class pts/s    Total ms  Avg cand  Checksum
+--------------------------------------------------------------------------------------------------------------------
+250000    uniform    1       replicated polygons              193.39    1292732.57      207.52      3.50  211505eab3abe507
+250000    clustered  1       replicated polygons              114.11    2190895.34      138.21      3.48  ec0047071b071b3d
+500000    uniform    2       replicated polygons              269.24    1857048.84      300.61      3.51  c0ee817d6cf4c549
+500000    clustered  2       replicated polygons              300.47    1664043.58      354.03      3.48  cebfa75e0426324b
+1000000   uniform    4       replicated polygons              403.77    2476627.45      466.90      3.51  e38e4d8a13e3441d
+1000000   clustered  4       replicated polygons              294.19    3399196.16      399.43      3.48  c98c4f58897e6cf9
+
+=== Multi-Process IPC Benchmark (file-based worker.exe) ===
+Dataset size: 1000000 points per distribution, workers: 4
+IPC files are written under .\ipc
+Dist       Polygon mode                   Write ms   Worker ms   Read ms    Total ms   Total pts/s  Checksum
+------------------------------------------------------------------------------------------------------
+uniform    replicated polygons              311.00      583.05      0.74      897.86    1113756.78  e38e4d8a13e3441d
+uniform    spatially sharded polygons       299.20      540.54      0.57      840.42    1189885.64  e38e4d8a13e3441d
+clustered  replicated polygons              378.94      531.83      0.57      911.42    1097184.79  c98c4f58897e6cf9
+clustered  spatially sharded polygons       349.80      491.75      0.95      842.59    1186813.32  c98c4f58897e6cf9
+
+============================================================
+=== Milestone 3 Benchmark Complete ===
+============================================================
+

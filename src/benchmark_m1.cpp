@@ -16,6 +16,12 @@ using namespace pdc_geo;
 using namespace pdc_gen;
 using namespace std::chrono;
 
+// Pakistan geographic bounding box (WGS84 lon/lat)
+static constexpr double PAK_LON_MIN = 60.87;
+static constexpr double PAK_LON_MAX = 77.84;
+static constexpr double PAK_LAT_MIN = 23.63;
+static constexpr double PAK_LAT_MAX = 37.10;
+
 // Query result: label which polygon(s) contain the point
 struct QueryResult {
     uint64_t point_id;
@@ -408,93 +414,124 @@ int main(int argc, char* argv[]) {
     std::cout << "=== SYNTHETIC BENCHMARK COMPLETE ===" << std::endl;
     std::cout << std::string(60, '=') << std::endl;
 
-    // Stage 4: Real-world data (if files exist)
+    // Stage 4: Real-world data benchmark
     std::cout << std::string(60, '=') << std::endl;
     std::cout << "=== REAL-WORLD DATA BENCHMARK ===" << std::endl;
     std::cout << std::string(60, '=') << std::endl;
-    
+
     try {
-        std::cout << "Attempting to load real-world data..." << std::endl;
+        // Auto-detect best available polygon file: Level 4 > Level 3 > Level 2
+        struct PolyCandidate { std::string file; std::string label; };
+        std::vector<PolyCandidate> poly_candidates = {
+            {"pak_admin4.geojson", "Level 4 - Union Councils (~6,000 polygons)"},
+            {"pak_admin3.geojson", "Level 3 - Tehsils (~600 loaded polygons)"},
+            {"pak_admin2.geojson", "Level 2 - Districts (204 polygons)"},
+        };
 
         std::string poly_path;
-        std::string point_path;
-        try {
-            const std::string executable_path =
-                (argc > 0 && argv != nullptr && argv[0] != nullptr) ? argv[0] : "";
-            auto resolved = resolve_realworld_geojson_paths(executable_path);
-            poly_path = resolved.first;
-            point_path = resolved.second;
-        } catch (const std::exception& e) {
-            std::cerr << "  Path resolver error: " << e.what() << std::endl;
-            poly_path.clear();
-            point_path.clear();
-        } catch (...) {
-            std::cerr << "  Path resolver unknown error" << std::endl;
-            poly_path.clear();
-            point_path.clear();
+        std::string poly_label;
+        for (const auto& c : poly_candidates) {
+            if (file_exists(c.file)) {
+                poly_path  = c.file;
+                poly_label = c.label;
+                break;
+            }
         }
 
-        if (!poly_path.empty() && !point_path.empty()) {
-            std::cout << "  Using: " << poly_path << std::endl;
-            std::cout << "  Using: " << point_path << std::endl;
+        if (poly_path.empty()) {
+            std::cout << "⚠ No polygon file found. Place one of the following in the project root:" << std::endl;
+            std::cout << "   pak_admin4.geojson  (GADM Level 4 — best for benchmarking)" << std::endl;
+            std::cout << "   pak_admin3.geojson  (GADM Level 3)" << std::endl;
+            std::cout << "   pak_admin2.geojson  (GADM Level 2 — already included)" << std::endl;
+            std::cout << "   Download from: gadm.org → Pakistan → GeoJSON" << std::endl;
         } else {
-            std::cout << "  Using fallback relative paths from current working directory." << std::endl;
-        }
+            std::cout << "Polygon file : " << poly_path << std::endl;
+            std::cout << "Admin level  : " << poly_label << std::endl;
 
-        std::cout << "  Loading polygons..." << std::endl;
-        auto real_polygons = GeoJSONLoader::load_polygons_from_geojson(
-            poly_path.empty() ? "pak_admin2.geojson" : poly_path);
-        std::cout << "  Loaded polygons: " << real_polygons.size() << std::endl;
+            std::cout << "Loading polygons..." << std::endl;
+            auto real_polygons = GeoJSONLoader::load_polygons_from_geojson(poly_path);
+            std::cout << "  Loaded: " << real_polygons.size() << " polygons" << std::endl;
 
-        std::cout << "  Loading centroid points..." << std::endl;
-        auto real_points = GeoJSONLoader::load_centroids_from_geojson(
-            point_path.empty() ? "pak_admincentroids.geojson" : point_path);
-        std::cout << "  Loaded points: " << real_points.size() << std::endl;
-        
-        if (!real_polygons.empty() && !real_points.empty()) {
-            std::cout << "✓ Successfully loaded real data" << std::endl;
-            std::cout << "  Polygons: " << real_polygons.size() << std::endl;
-            std::cout << "  Points: " << real_points.size() << std::endl;
-            
-            // Benchmark on real data
-            std::cout << "Benchmarking on real Pakistan administrative data..." << std::endl;
-            
-            // Stage 1: Brute force
-            std::cout << "  Stage 1 (Brute force + BBox):";
-            std::cout.flush();
-            auto [real_results_brute, real_time_brute] = benchmark_brute_force_with_bbox(real_points, real_polygons);
-            double real_throughput_brute = (double)real_points.size() / (real_time_brute / 1e9);
-            std::cout << " " << std::fixed << std::setprecision(2) 
-                      << real_throughput_brute << " pts/sec ("
-                      << (real_time_brute / 1e6) << " ms)" << std::endl;
-            
-            // Stage 2: Quadtree
-            std::cout << "  Stage 2 (Quadtree index):";
-            std::cout.flush();
-            long long real_index_build_ns;
-            auto [real_results_qt, real_time_qt] = benchmark_with_quadtree(real_points, real_polygons, &real_index_build_ns);
-            double real_throughput_qt = (double)real_points.size() / (real_time_qt / 1e9);
-            std::cout << " " << std::fixed << std::setprecision(2)
-                      << real_throughput_qt << " pts/sec ("
-                      << (real_time_qt / 1e6) << " ms)"
-                      << " [build: " << (real_index_build_ns / 1e6) << " ms]" << std::endl;
-            double real_speedup = (double)real_time_brute / real_time_qt;
-            std::cout << "    Speedup: " << std::fixed << std::setprecision(2) << real_speedup << "x" << std::endl;
-            
-            // Validate
-            validate_results(real_results_brute, real_results_qt);
-            
-        } else {
-            std::cout << "⚠ Real-world data files not found (pak_admin2.geojson, pak_admincentroids.geojson)" << std::endl;
-            std::cout << "   Skipping real-world benchmark." << std::endl;
-            std::cout << "   To enable: Download from OpenStreetMap or provide GeoJSON files." << std::endl;
+            if (real_polygons.empty()) {
+                std::cout << "⚠ No polygons loaded — skipping real-world benchmark." << std::endl;
+            } else {
+                // Generate synthetic GPS points over Pakistan's geographic bounds.
+                // These simulate real events (deliveries, phone signals, ride pings)
+                // rather than the 745 administrative centroids we used before.
+                const size_t REAL_N = 100000;
+                std::cout << "Generating " << REAL_N
+                          << " synthetic GPS points over Pakistan bounds "
+                          << "[lon " << PAK_LON_MIN << "-" << PAK_LON_MAX
+                          << ", lat " << PAK_LAT_MIN << "-" << PAK_LAT_MAX << "]"
+                          << std::endl;
+
+                std::vector<std::pair<std::string, std::vector<Point>>> real_datasets = {
+                    {"uniform",
+                     UniformDistribution::generate(
+                         REAL_N,
+                         PAK_LON_MIN, PAK_LON_MAX,
+                         PAK_LAT_MIN, PAK_LAT_MAX)},
+                    {"clustered",
+                     ClusteredDistribution::generate(
+                         REAL_N, 8,
+                         PAK_LON_MIN, PAK_LON_MAX,
+                         PAK_LAT_MIN, PAK_LAT_MAX,
+                         0.8)},  // ~90 km std dev — mimics urban concentration
+                };
+
+                std::cout << "Benchmarking " << real_polygons.size()
+                          << " real Pakistan polygons vs " << REAL_N
+                          << " synthetic GPS points..." << std::endl;
+
+                for (const auto& [dist_label, real_points] : real_datasets) {
+                    std::cout << "\n=== real-world / " << dist_label
+                              << " distribution ===" << std::endl;
+
+                    // Stage 1: Brute force + BBox
+                    std::cout << "  Stage 1 (Brute force + BBox):";
+                    std::cout.flush();
+                    auto [r_brute, t_brute] = benchmark_brute_force_with_bbox(real_points, real_polygons);
+                    double tp_brute = (double)REAL_N / (t_brute / 1e9);
+                    std::cout << " " << std::fixed << std::setprecision(2)
+                              << tp_brute << " pts/sec ("
+                              << (t_brute / 1e6) << " ms)" << std::endl;
+
+                    // Stage 2: Quadtree
+                    std::cout << "  Stage 2 (Quadtree index):";
+                    std::cout.flush();
+                    long long qt_build_ns;
+                    auto [r_qt, t_qt] = benchmark_with_quadtree(real_points, real_polygons, &qt_build_ns);
+                    double tp_qt = (double)REAL_N / (t_qt / 1e9);
+                    std::cout << " " << std::fixed << std::setprecision(2)
+                              << tp_qt << " pts/sec ("
+                              << (t_qt / 1e6) << " ms)"
+                              << " [build: " << (qt_build_ns / 1e6) << " ms]" << std::endl;
+                    std::cout << "    Speedup: " << std::fixed << std::setprecision(2)
+                              << ((double)t_brute / t_qt) << "x" << std::endl;
+
+                    // Stage 3: Strip Index
+                    std::cout << "  Stage 3 (Strip Index):";
+                    std::cout.flush();
+                    long long strip_build_ns;
+                    auto [r_strip, t_strip] = benchmark_with_strip_index(real_points, real_polygons, &strip_build_ns);
+                    double tp_strip = (double)REAL_N / (t_strip / 1e9);
+                    std::cout << " " << std::fixed << std::setprecision(2)
+                              << tp_strip << " pts/sec ("
+                              << (t_strip / 1e6) << " ms)"
+                              << " [build: " << (strip_build_ns / 1e6) << " ms]" << std::endl;
+                    std::cout << "    Speedup: " << std::fixed << std::setprecision(2)
+                              << ((double)t_brute / t_strip) << "x" << std::endl;
+
+                    validate_results(r_brute, r_qt);
+                    validate_results(r_brute, r_strip);
+                }
+            }
         }
     } catch (const std::exception& e) {
-        std::cout << "⚠ Error loading real-world data: " << e.what() << std::endl;
-        std::cout << "   Continuing with synthetic data results only." << std::endl;
+        std::cout << "⚠ Error in real-world benchmark: " << e.what() << std::endl;
+        std::cout << "  Continuing with synthetic data results only." << std::endl;
     } catch (...) {
-        std::cout << "⚠ Unknown non-standard error while loading real-world data." << std::endl;
-        std::cout << "   Continuing with synthetic data results only." << std::endl;
+        std::cout << "⚠ Unknown error in real-world benchmark." << std::endl;
     }
     
     std::cout << std::string(60, '=') << std::endl;

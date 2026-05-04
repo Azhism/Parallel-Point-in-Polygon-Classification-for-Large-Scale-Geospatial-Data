@@ -6,13 +6,13 @@ This project classifies large GPS-like point sets against polygon regions using 
 
 Complete through Milestone 3.
 
-Canonical benchmark output files:
+Current live benchmark output files:
 
-1. `milestone_1.txt` - raw output from `build\benchmark_m1.exe`
-2. `milestone_2.txt` - raw output from `build\benchmark_m2.exe`
-3. `milestone_3.txt` - raw output from `build\benchmark_m3.exe --full`
+1. `bench_m1_live.txt` - latest raw output from `build\benchmark_m1.exe`
+2. `bench_m2_live.txt` - latest raw output from `build\benchmark_m2.exe`
+3. `bench_m3_live.txt` - latest raw output from `build\benchmark_m3.exe`
 
-Use those three files as the ground truth for timings. Older report files may contain historical runs from earlier sessions.
+Use those three files as the ground truth for current timings. The older `milestone_*.txt` files are historical runs retained for reference.
 
 ## Milestone 1
 
@@ -33,22 +33,23 @@ Polygon creation:
 
 1. Synthetic polygons are created with `PolygonLoader::create_grid`.
 2. The default benchmark grid is 100 x 100 = 10,000 square polygons.
-3. Real polygons are loaded from `pak_admin2.geojson`.
+3. Real polygons are loaded from `pak_admin3.geojson` when available, falling back to `pak_admin2.geojson`.
 
-Canonical M1 highlights from `milestone_1.txt`:
+Current M1 highlights from `bench_m1_live.txt`:
 
 | Dataset | Brute Force + BBox | Quadtree | Strip Index | Best Indexed Speedup |
 |---|---:|---:|---:|---:|
-| 100K uniform | 2405.80 ms | 90.45 ms | 87.62 ms | 27.46x |
-| 1M uniform | 16500.25 ms | 787.09 ms | 876.24 ms | 20.96x |
-| 100K clustered | 1568.85 ms | 50.07 ms | 73.75 ms | 31.33x |
-| 1M clustered | 16553.33 ms | 520.58 ms | 711.06 ms | 31.80x |
+| 100K uniform | 1490.67 ms | 176.46 ms | 224.74 ms | 8.45x |
+| 1M uniform | 14572.09 ms | 729.80 ms | 753.51 ms | 19.97x |
+| 100K clustered | 1421.43 ms | 48.25 ms | 63.63 ms | 29.46x |
+| 1M clustered | 14175.36 ms | 482.41 ms | 642.42 ms | 29.38x |
 
 Real-world data:
 
-1. `pak_admin2.geojson`: 204 loaded polygons.
-2. `pak_admincentroids.geojson`: 745 loaded points.
-3. Results validate against the brute-force baseline.
+1. `pak_admin3.geojson`: 608 loaded Pakistan Level 3 tehsil polygons.
+2. The benchmark generates 100,000 GPS-like points over Pakistan bounds.
+3. Real-world speedup is modest but positive: 1.27x uniform and 1.42x clustered using the strip index.
+4. Results validate against the brute-force baseline.
 
 ## Milestone 2
 
@@ -70,16 +71,16 @@ Current machine note:
 Available threads: 4
 ```
 
-There is no valid 8-thread result in the current canonical benchmark output.
+There is no valid 8-thread result in the current live benchmark output.
 
-Canonical M2 highlights from `milestone_2.txt`:
+Current M2 highlights from `bench_m2_live.txt`:
 
 | Dataset | Sequential | Best Strategy | Best Time | Speedup |
 |---|---:|---|---:|---:|
-| 100K uniform | 91.75 ms | Hybrid | 36.79 ms | 2.49x |
-| 100K clustered | 53.73 ms | Hybrid | 41.01 ms | 1.31x |
-| 1M uniform | 845.84 ms | Hybrid | 390.97 ms | 2.16x |
-| 1M clustered | 546.53 ms | Hybrid | 302.38 ms | 1.81x |
+| 100K uniform | 72.61 ms | Hybrid | 29.79 ms | 2.44x |
+| 100K clustered | 44.79 ms | Static OMP | 23.97 ms | 1.87x |
+| 1M uniform | 737.50 ms | Dynamic OMP | 315.20 ms | 2.34x |
+| 1M clustered | 463.47 ms | Dynamic OMP | 291.61 ms | 1.59x |
 
 Thread-scaling interpretation:
 
@@ -129,18 +130,16 @@ The design explores the distributed setting:
 4. Results are aggregated centrally.
 5. The same layout can still map directly to MPI ranks in a future extension.
 
-Canonical M3 large-scale results from `milestone_3.txt`:
+Current M3 large-scale results from `bench_m3_live.txt`:
 
 | Dataset | Distribution | Workers | Class Time | Class Throughput | Total Time |
 |---:|---|---:|---:|---:|---:|
-| 1M | uniform | 4 | 518.11 ms | 1,930,081 pts/sec | 587.91 ms |
-| 1M | clustered | 4 | 358.84 ms | 2,786,737 pts/sec | 481.86 ms |
-| 10M | uniform | 4 | 5298.39 ms | 1,887,365 pts/sec | 5713.48 ms |
-| 10M | clustered | 4 | 3255.79 ms | 3,071,455 pts/sec | 4151.00 ms |
-| 100M | uniform | 4 | 46222.22 ms | 2,163,462 pts/sec | 49846.42 ms |
-| 100M | clustered | 4 | 34277.60 ms | 2,917,357 pts/sec | 43051.56 ms |
+| 1M | uniform | 4 | 404.22 ms | 2,473,898 pts/sec | 466.84 ms |
+| 1M | clustered | 4 | 296.59 ms | 3,371,715 pts/sec | 400.97 ms |
+| 10M | uniform | 4 | 3743.42 ms | 2,671,352 pts/sec | 4064.82 ms |
+| 10M | clustered | 4 | 2729.17 ms | 3,664,123 pts/sec | 3525.61 ms |
 
-Replication vs sharding from `milestone_3.txt`:
+Replication vs sharding from `bench_m3_live.txt`:
 
 | Distribution | Mode | Indexed Polygon Copies | Checksum |
 |---|---|---:|---|
@@ -151,14 +150,14 @@ Replication vs sharding from `milestone_3.txt`:
 
 Matching checksums show that sharding preserved classification results.
 
-Multi-process IPC results from `milestone_3.txt`:
+Multi-process IPC results from `bench_m3_live.txt`:
 
 | Distribution | Mode | Write Time | Worker Time | Read Time | Total Time | Checksum |
 |---|---|---:|---:|---:|---:|---|
-| uniform | replicated | 494.25 ms | 1137.89 ms | 0.72 ms | 1633.86 ms | `e38e4d8a13e3441d` |
-| uniform | sharded | 746.46 ms | 1076.23 ms | 1.80 ms | 1824.56 ms | `e38e4d8a13e3441d` |
-| clustered | replicated | 492.64 ms | 1097.83 ms | 0.63 ms | 1591.21 ms | `c98c4f58897e6cf9` |
-| clustered | sharded | 542.19 ms | 1067.45 ms | 0.60 ms | 1610.47 ms | `c98c4f58897e6cf9` |
+| uniform | replicated | 311.00 ms | 583.05 ms | 0.74 ms | 897.86 ms | `e38e4d8a13e3441d` |
+| uniform | sharded | 299.20 ms | 540.54 ms | 0.57 ms | 840.42 ms | `e38e4d8a13e3441d` |
+| clustered | replicated | 378.94 ms | 531.83 ms | 0.57 ms | 911.42 ms | `c98c4f58897e6cf9` |
+| clustered | sharded | 349.80 ms | 491.75 ms | 0.95 ms | 842.59 ms | `c98c4f58897e6cf9` |
 
 The process checksums match the in-memory benchmark checksums for the same 1M datasets, so the IPC worker path preserves correctness while exposing communication overhead.
 

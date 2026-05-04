@@ -1,0 +1,77 @@
+﻿=== Milestone 1: Sequential Baseline with Spatial Indexing ===
+Creating polygon grid (100x100)...
+  Polygons: 10000
+=== uniform distribution ===
+Dataset: 100000 points
+  Stage 1 (Brute force + BBox): 67083.84 pts/sec (1490.67 ms)
+  Stage 2 (Quadtree index): 566715.12 pts/sec (176.46 ms) [build: 8.29 ms]
+    Speedup: 8.45x
+  Stage 3 (Strip Index): 444966.14 pts/sec (224.74 ms) [build: 0.50 ms]
+    Speedup: 6.63x
+? Results validated: all queries match.
+? Results validated: all queries match.
+
+Dataset: 1000000 points
+  Stage 1 (Brute force + BBox): 68624.32 pts/sec (14572.09 ms)
+  Stage 2 (Quadtree index): 1370245.56 pts/sec (729.80 ms) [build: 5.90 ms]
+    Speedup: 19.97x
+  Stage 3 (Strip Index): 1327123.46 pts/sec (753.51 ms) [build: 0.35 ms]
+    Speedup: 19.34x
+? Results validated: all queries match.
+? Results validated: all queries match.
+
+=== clustered distribution ===
+Dataset: 100000 points
+  Stage 1 (Brute force + BBox): 70351.75 pts/sec (1421.43 ms)
+  Stage 2 (Quadtree index): 2072607.59 pts/sec (48.25 ms) [build: 5.66 ms]
+    Speedup: 29.46x
+  Stage 3 (Strip Index): 1571598.08 pts/sec (63.63 ms) [build: 0.44 ms]
+    Speedup: 22.34x
+? Results validated: all queries match.
+? Results validated: all queries match.
+
+Dataset: 1000000 points
+  Stage 1 (Brute force + BBox): 70544.94 pts/sec (14175.36 ms)
+  Stage 2 (Quadtree index): 2072919.93 pts/sec (482.41 ms) [build: 5.93 ms]
+    Speedup: 29.38x
+  Stage 3 (Strip Index): 1556615.75 pts/sec (642.42 ms) [build: 0.53 ms]
+    Speedup: 22.07x
+? Results validated: all queries match.
+? Results validated: all queries match.
+
+============================================================
+=== SYNTHETIC BENCHMARK COMPLETE ===
+============================================================
+============================================================
+=== REAL-WORLD DATA BENCHMARK ===
+============================================================
+Polygon file : pak_admin3.geojson
+Admin level  : Level 3 - Tehsils (~600 loaded polygons)
+Loading polygons...
+? Loaded 608 polygons from pak_admin3.geojson
+  Loaded: 608 polygons
+Generating 100000 synthetic GPS points over Pakistan bounds [lon 60.87-77.84, lat 23.63-37.10]
+Benchmarking 608 real Pakistan polygons vs 100000 synthetic GPS points...
+
+=== real-world / uniform distribution ===
+  Stage 1 (Brute force + BBox): 289443.39 pts/sec (345.49 ms)
+  Stage 2 (Quadtree index): 356914.56 pts/sec (280.18 ms) [build: 1.06 ms]
+    Speedup: 1.23x
+  Stage 3 (Strip Index): 366599.69 pts/sec (272.78 ms) [build: 0.03 ms]
+    Speedup: 1.27x
+? Results validated: all queries match.
+? Results validated: all queries match.
+
+=== real-world / clustered distribution ===
+  Stage 1 (Brute force + BBox): 574963.78 pts/sec (173.92 ms)
+  Stage 2 (Quadtree index): 758948.19 pts/sec (131.76 ms) [build: 1.04 ms]
+    Speedup: 1.32x
+  Stage 3 (Strip Index): 814705.10 pts/sec (122.74 ms) [build: 0.03 ms]
+    Speedup: 1.42x
+? Results validated: all queries match.
+? Results validated: all queries match.
+============================================================
+=== Benchmark Complete ===
+============================================================
+
+

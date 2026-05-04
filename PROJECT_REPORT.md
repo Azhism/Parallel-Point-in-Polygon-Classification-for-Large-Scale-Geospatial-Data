@@ -20,7 +20,7 @@
 
 ### What Is Point-in-Polygon (PiP)?
 
-Imagine you have a map of Pakistan divided into 204 administrative districts (polygons). You also have **millions of GPS coordinates** — locations of delivery trucks, phone signals, emergency calls, or ride-share cars. The question is:
+Imagine you have a map of Pakistan divided into hundreds of administrative tehsils or districts (polygons). You also have **millions of GPS coordinates** — locations of delivery trucks, phone signals, emergency calls, or ride-share cars. The question is:
 
 > **For each GPS point, which district does it fall inside?**
 
@@ -322,16 +322,17 @@ This simulates real GPS data where cities generate dense point clouds while rura
 
 ### Milestone 1 Results
 
-| Dataset | Brute Force | Quadtree | Strip Index | Speedup |
+| Dataset | Brute Force | Quadtree | Strip Index | Best Speedup |
 |---|---|---|---|---|
-| 100K uniform | 52K pts/sec | 823K pts/sec | 858K pts/sec | ~16x |
-| 1M uniform | 61K pts/sec | 1.27M pts/sec | 1.41M pts/sec | ~21-23x |
-| 100K clustered | 65K pts/sec | 1.72M pts/sec | 1.53M pts/sec | ~24-27x |
-| 1M clustered | 64K pts/sec | 1.88M pts/sec | 1.64M pts/sec | ~26-30x |
-| Real Pakistan (204 poly, 745 pts) | 71K pts/sec | 71K pts/sec | — | ~1.0x |
+| 100K uniform | 67K pts/sec | 567K pts/sec | 445K pts/sec | 8.45x |
+| 1M uniform | 69K pts/sec | 1.37M pts/sec | 1.33M pts/sec | 19.97x |
+| 100K clustered | 70K pts/sec | 2.07M pts/sec | 1.57M pts/sec | 29.46x |
+| 1M clustered | 71K pts/sec | 2.07M pts/sec | 1.56M pts/sec | 29.38x |
+| Real Pakistan ADM3 uniform (608 poly, 100K pts) | 289K pts/sec | 357K pts/sec | 367K pts/sec | 1.27x |
+| Real Pakistan ADM3 clustered (608 poly, 100K pts) | 575K pts/sec | 759K pts/sec | 815K pts/sec | 1.42x |
 
-**Why is the real-world speedup only 1.0x?**  
-With only 204 polygons, the bounding-box scan over 204 entries is already extremely fast (~10ms for 745 points). The quadtree overhead of tree traversal equals the brute-force time at this tiny scale. This is **expected behavior** — the index pays off at thousands of polygons.
+**Why is the real-world speedup modest?**  
+The real Pakistan ADM3 dataset has 608 loaded tehsil polygons, not 10,000 small grid cells. The bounding-box scan is already strong at this size, and real administrative polygons have large overlapping bounding boxes. The index still helps, but the gain is modest: 1.27x for uniform GPS-like points and 1.42x for clustered points. This is expected behavior and shows that spatial indexing pays off more strongly as polygon count and spatial density increase.
 
 **Why does clustered data get higher speedup than uniform?**  
 Clustered points hit the same quadtree cells repeatedly. Those cells stay warm in the CPU's L1/L2 cache, so repeated queries are faster. Uniform points scatter across different cells on each query, causing more cache misses.
@@ -470,7 +471,7 @@ The benchmark separates:
 The speedup is reported on the **end-to-end** time so results are honest.
 
 **Key insight from results:**  
-Morton sort helps **uniform data** (1.68x end-to-end speedup for 1M uniform) but **hurts clustered data** (only 1.05x for 1M clustered). Why? Clustered points are already naturally grouped by location — they already hit the same cache lines. Morton sort reshuffles them into a different order that may actually break this natural locality.
+Morton sort helps the classify-only phase, but its end-to-end benefit depends on whether the sorting cost is recovered. In the current live run, 1M uniform data gets 1.77x end-to-end speedup, while 1M clustered data is about 1.00x end-to-end. Clustered points are already naturally grouped by location, so the extra sort cost mostly cancels out the cache-locality benefit.
 
 ---
 
@@ -562,18 +563,18 @@ std::atomic<int> overflow_cursor{static_total};  // counter for Phase 2
 
 | Dataset | Static | Dynamic | Tiled (e2e) | Work-Steal | Hybrid |
 |---|---|---|---|---|---|
-| 100K uniform | 1.98x | **2.27x** | 2.01x | 1.75x | 1.40x |
-| 100K clustered | 1.93x | 1.73x | 1.30x | **1.94x** | 1.89x |
-| 1M uniform | 2.03x | **2.01x** | 1.68x | 2.09x | 1.97x |
-| 1M clustered | 1.45x | 1.59x | 1.05x | 1.58x | **1.59x** |
+| 100K uniform | 2.27x | 2.34x | 1.95x | 2.34x | **2.44x** |
+| 100K clustered | **1.87x** | 1.84x | 1.38x | 1.80x | 1.75x |
+| 1M uniform | 2.33x | **2.34x** | 1.77x | 2.32x | 2.33x |
+| 1M clustered | 1.55x | **1.59x** | 1.00x | 1.58x | 1.52x |
 
 #### Thread Scaling (1M uniform, Dynamic strategy)
 
 | Threads | Time | Speedup | Parallel Efficiency |
 |---|---|---|---|
-| 1 | 843 ms | 1.00x | 100% |
-| 2 | 519 ms | 1.62x | 81% |
-| 4 | 466 ms | 1.81x | **45%** |
+| 1 | 949.10 ms | 1.00x | 100.0% |
+| 2 | 405.68 ms | 2.34x | 117.0% |
+| 4 | 387.05 ms | 2.45x | 61.3% |
 
 #### Why only ~2x speedup with 4 threads?
 
@@ -748,23 +749,22 @@ This produces a 64-bit fingerprint of all results. If the checksum matches betwe
 
 ### Milestone 3 Results
 
-#### Large-Scale Throughput (4 workers, replicated, --full mode)
+#### Large-Scale Throughput (4 workers, replicated, default live run)
 
 | Points | Uniform | Clustered | Notes |
 |---|---|---|---|
-| 1M | 1.94M pts/sec | 1.72M pts/sec | ✅ Checksums verified |
-| 10M | 1.94M pts/sec | 2.69M pts/sec | ✅ Consistent throughput |
-| 100M | **2.10M pts/sec** | **2.38M pts/sec** | ✅ Linear scaling holds |
+| 1M | 2.47M pts/sec | 3.37M pts/sec | Checksums verified |
+| 10M | 2.67M pts/sec | 3.66M pts/sec | Consistent throughput |
 
-Throughput stays flat from 1M to 100M — excellent linear scaling behavior.
+The current live M3 file is the default run, so it records 1M and 10M results. The `--full` mode remains available for 100M runs.
 
 #### Strong Scaling (1M points, replicated)
 
 | Workers | Uniform ms | Uniform speedup | Clustered ms | Clustered speedup |
 |---|---|---|---|---|
-| 1 | 863ms | 1.00x | 519ms | 1.00x |
-| 2 | 695ms | 1.24x | **631ms** | **0.82x ← slower!** | 
-| 4 | 505ms | 1.71x | 334ms | 1.62x |
+| 1 | 788.19ms | 1.00x | 459.98ms | 1.00x |
+| 2 | 541.43ms | 1.46x | 625.96ms | 0.73x |
+| 4 | 400.95ms | 1.97x | 363.22ms | 1.27x |
 
 **The 2-worker clustered regression is a real observation:**  
 The 5 cluster centers happen to be unevenly distributed between the two X strips [0,50) and [50,100). One worker gets ~65% of the points, the other gets ~35%. The imbalanced worker finishes late and delays the result. At 4 workers, the strips are narrower and the clusters distribute more evenly across them. This demonstrates the **load imbalance under spatial skew** concept directly.
@@ -773,24 +773,24 @@ The 5 cluster centers happen to be unevenly distributed between the two X strips
 
 | Distribution | Mode | Write | Workers | Read | Total | Throughput |
 |---|---|---|---|---|---|---|
-| Uniform | Replicated | 348ms | 736ms | 8ms | 1094ms | 914K pts/sec |
-| Uniform | Sharded | 359ms | 680ms | 8ms | 1047ms | 955K pts/sec |
-| Clustered | Replicated | 375ms | 622ms | 5ms | 1002ms | 998K pts/sec |
-| Clustered | Sharded | 370ms | 608ms | 9ms | 987ms | 1013K pts/sec |
+| Uniform | Replicated | 311.00ms | 583.05ms | 0.74ms | 897.86ms | 1.11M pts/sec |
+| Uniform | Sharded | 299.20ms | 540.54ms | 0.57ms | 840.42ms | 1.19M pts/sec |
+| Clustered | Replicated | 378.94ms | 531.83ms | 0.57ms | 911.42ms | 1.10M pts/sec |
+| Clustered | Sharded | 349.80ms | 491.75ms | 0.95ms | 842.59ms | 1.19M pts/sec |
 
 **Key observation — IPC overhead:**
 ```
-In-process async (same process): 1.94M pts/sec for 1M uniform
-Multi-process IPC:                  914K pts/sec for same dataset
-Overhead ratio: ~2x slower
+In-process async (same process): 2.47M pts/sec for 1M uniform
+Multi-process IPC:                 1.11M pts/sec for same dataset
+Overhead ratio: ~2.2x slower
 
 Breakdown of IPC cost:
-  Write to disk:  348ms  (serializing 1M points + polygons to binary files)
-  Workers compute: 736ms  (actual useful work)
-  Read results:     8ms  (reading tiny aggregate files)
+  Write to disk:  311ms  (serializing 1M points + polygons to binary files)
+  Workers compute: 583ms  (actual useful work)
+  Read results:     1ms  (reading tiny aggregate files)
 ```
 
-File-based IPC costs ~350ms of pure I/O overhead. This is the price of true process isolation and the simulation of distributed computing where workers would be on separate machines.
+File-based IPC costs ~311ms of pure write overhead. This is the price of true process isolation and the simulation of distributed computing where workers would be on separate machines.
 
 ---
 
@@ -802,28 +802,29 @@ File-based IPC costs ~350ms of pure I/O overhead. This is the price of true proc
 
 | Dataset | Quadtree | Strip Index |
 |---|---|---|
-| 100K uniform | 16x | 17x |
-| 1M uniform | 21x | 23x |
-| 100K clustered | 27x | 24x |
-| 1M clustered | 29x | 26x |
-| Real Pakistan | 1.0x | — |
+| 100K uniform | 8.45x | 6.63x |
+| 1M uniform | 19.97x | 19.34x |
+| 100K clustered | 29.46x | 22.34x |
+| 1M clustered | 29.38x | 22.07x |
+| Real Pakistan ADM3 uniform | 1.23x | 1.27x |
+| Real Pakistan ADM3 clustered | 1.32x | 1.42x |
 
 #### Milestone 2 — Parallel Speedups over Sequential (4 threads)
 
 | Dataset | Best Strategy | Speedup | 4-Thread Efficiency |
 |---|---|---|---|
-| 100K uniform | Dynamic OMP | 2.27x | 57% |
-| 100K clustered | Work-Stealing | 1.94x | 49% |
-| 1M uniform | Work-Stealing | 2.09x | 52% |
-| 1M clustered | Dynamic / Hybrid | 1.59x | 40% |
+| 100K uniform | Hybrid | 2.44x | 61% |
+| 100K clustered | Static OMP | 1.87x | 47% |
+| 1M uniform | Dynamic OMP | 2.34x | 59% |
+| 1M clustered | Dynamic OMP | 1.59x | 40% |
 
 #### Milestone 3 — Distributed Scale
 
 | Points | In-process | Multi-process IPC | Overhead |
 |---|---|---|---|
-| 1M | 1.94M pts/sec | 914K pts/sec | ~2x |
-| 10M | 1.94M pts/sec | N/A | — |
-| 100M | 2.10M pts/sec | N/A | — |
+| 1M | 2.47M pts/sec | 1.11M pts/sec | ~2.2x |
+| 10M | 2.67M pts/sec | N/A | default live run |
+| 100M | use `--full` | N/A | not in latest live file |
 
 ### Why Doesn't Speedup Equal Thread Count?
 

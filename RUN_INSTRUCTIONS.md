@@ -1,94 +1,105 @@
 # Run Instructions
 
-## Overview
-
-This project provides two benchmark executables:
-
-1. Milestone 1: sequential baseline with spatial indexing
-2. Milestone 2: parallel classification strategies with OpenMP
-
-Use these instructions from the project root directory.
-
----
-
 ## Requirements
 
-1. C++17-capable compiler (g++)
-2. GNU binutils (ar)
-3. OpenMP support enabled in compiler toolchain
+- C++17-capable compiler (g++)
+- GNU binutils (ar)
+- OpenMP support (`-fopenmp`)
+- Windows: MSYS2/UCRT64 toolchain (`C:\msys64\ucrt64\bin`)
 
-Optional:
-
-1. CMake 3.16+ (if you want CMake workflow)
+Optional: CMake 3.16+
 
 ---
 
 ## Windows (Recommended)
 
-Build with PowerShell script:
+Ensure MSYS2 DLLs are in PATH first:
 
 ```powershell
-Set-Location D:\Classess\PDC\Project\Parallel-Point-in-Polygon-Classification-for-Large-Scale-Geospatial-Data
+$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+```
+
+Build everything (M1, M2, M3, worker):
+
+```powershell
 .\build.ps1
 ```
 
-Run unit test:
+Run unit tests:
 
 ```powershell
 .\build\test_ray_casting.exe
 ```
 
-Run Milestone 1 benchmark:
+---
+
+## Milestone 1 — Sequential Baseline
 
 ```powershell
 .\build\benchmark_m1.exe
 ```
 
-Run Milestone 2 benchmark:
+What to expect: brute force, quadtree, and strip index stages with speedup comparisons and real-world Pakistan data validation.
+
+---
+
+## Milestone 2 — Parallel Classification
 
 ```powershell
 .\build\benchmark_m2.exe
 ```
 
-Important:
-
-1. Run binaries from project root so relative data paths resolve correctly.
-2. If benchmark stops at real-world loading, confirm the data files exist in project root:
-   - pak_admin2.geojson
-   - pak_admincentroids.geojson
+What to expect: sequential baseline vs static OMP, dynamic OMP, tiled+Morton, work-stealing, and hybrid strategies. Thread-scaling tables at 1/2/4 threads.
 
 ---
 
-## Linux and macOS
+## Milestone 3 — Scalable Batch and Multi-Process
 
-Build:
+Quick run (100K + 1M, fast):
+
+```powershell
+.\build\benchmark_m3.exe --quick
+```
+
+Default run (1M + 10M + scaling tables):
+
+```powershell
+.\build\benchmark_m3.exe
+```
+
+Full required-scale run (includes 100M):
+
+```powershell
+.\build\benchmark_m3.exe --full
+```
+
+Useful flags:
+
+```text
+--quick                  Run 100K and 1M only
+--full                   Include 100M benchmark
+--sizes 1000000,10000000 Comma-separated size list
+--workers 4              Number of spatial workers
+--batch-size 250000      Streaming batch size
+--skip-scaling           Skip strong/weak scaling tables
+```
+
+What to expect: batched master/worker throughput at 1M/10M/100M points, replication vs sharding comparison with checksums, multi-process IPC timing (write/worker/read), and strong/weak scaling tables.
+
+---
+
+## Linux / macOS
 
 ```bash
-cd /path/to/Parallel-Point-in-Polygon-Classification-for-Large-Scale-Geospatial-Data
 bash build.sh
-```
-
-Run unit test:
-
-```bash
-./build/test_ray_casting
-```
-
-Run Milestone 1 benchmark:
-
-```bash
 ./build/benchmark_m1
-```
-
-Run Milestone 2 benchmark:
-
-```bash
 ./build/benchmark_m2
+./build/benchmark_m3 --full
 ```
 
 ---
 
-## CMake Workflow (Optional)
+## CMake (Optional)
 
 ```bash
 cmake -S . -B build
@@ -96,28 +107,32 @@ cmake --build build --config Release
 ctest --test-dir build --output-on-failure
 ```
 
-Then run benchmark binaries from the produced build output folder.
-
 ---
 
-## What to Expect
+## Important Notes
 
-1. benchmark_m1 prints sequential/indexed synthetic benchmark stages and validation checks.
-2. benchmark_m2 prints sequential and parallel strategies with speedups and thread-scaling summaries.
-3. Validation lines should report matching results against baseline.
+1. Always run binaries from the project root so relative data paths resolve:
+   - `pak_admin3.geojson`
+   - `pak_admin2.geojson`
+   - `pak_admincentroids.geojson`
+2. Current benchmark outputs are `bench_m1_live.txt`, `bench_m2_live.txt`, `bench_m3_live.txt` — these are the ground truth for latest timings.
+3. If M3 multi-process IPC runs, it writes temporary files under `ipc/` — that directory is created automatically.
+
+To refresh the live benchmark files:
+
+```powershell
+.\build\benchmark_m1.exe | Tee-Object -FilePath bench_m1_live.txt
+.\build\benchmark_m2.exe | Tee-Object -FilePath bench_m2_live.txt
+.\build\benchmark_m3.exe | Tee-Object -FilePath bench_m3_live.txt
+```
 
 ---
 
 ## Troubleshooting
 
-1. Build fails with OpenMP errors:
-   - Verify toolchain supports -fopenmp.
-
-2. Real-world section fails to load:
-   - Ensure pak_admin2.geojson and pak_admincentroids.geojson are present in project root.
-   - Run executable from project root, not from a different working directory.
-
-3. Benchmark is slower than expected:
-   - Close background heavy applications.
-   - Re-run and compare medians instead of single-run numbers.
-
+| Problem | Fix |
+|---|---|
+| Build fails with OpenMP errors | Verify `-fopenmp` is supported by your toolchain |
+| Real-world section fails to load | Confirm GeoJSON files are in project root; run from project root |
+| M3 worker.exe not found | Build with `build.ps1` before running `benchmark_m3.exe` |
+| Benchmark slower than expected | Close background apps; compare median runs, not single runs |
