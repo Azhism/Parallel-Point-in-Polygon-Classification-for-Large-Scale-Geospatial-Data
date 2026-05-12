@@ -12,7 +12,7 @@ Current live benchmark output files:
 2. `bench_m2_live.txt` - latest raw output from `build\benchmark_m2.exe`
 3. `bench_m3_live.txt` - latest raw output from `build\benchmark_m3.exe`
 
-Use those three files as the ground truth for current timings. The older `milestone_*.txt` files are historical runs retained for reference.
+Use those three files as the ground truth for current timings.
 
 ## Milestone 1
 
